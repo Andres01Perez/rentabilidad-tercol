@@ -10,11 +10,25 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppNegociosFijosRouteImport } from './routes/_app/negocios-fijos'
+import { Route as AppListasPreciosRouteImport } from './routes/_app/listas-precios'
+import { Route as AppHistorialRouteImport } from './routes/_app/historial'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppCostosProductosRouteImport } from './routes/_app/costos-productos'
+import { Route as AppCostosOperacionalesRouteImport } from './routes/_app/costos-operacionales'
+import { Route as AppConfiguracionesRouteImport } from './routes/_app/configuraciones'
+import { Route as AppCalculadoraRouteImport } from './routes/_app/calculadora'
+import { Route as AppAnalisisVentasRouteImport } from './routes/_app/analisis-ventas'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -22,30 +36,139 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppNegociosFijosRoute = AppNegociosFijosRouteImport.update({
+  id: '/negocios-fijos',
+  path: '/negocios-fijos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
+  id: '/listas-precios',
+  path: '/listas-precios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHistorialRoute = AppHistorialRouteImport.update({
+  id: '/historial',
+  path: '/historial',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCostosProductosRoute = AppCostosProductosRouteImport.update({
+  id: '/costos-productos',
+  path: '/costos-productos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCostosOperacionalesRoute = AppCostosOperacionalesRouteImport.update({
+  id: '/costos-operacionales',
+  path: '/costos-operacionales',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracionesRoute = AppConfiguracionesRouteImport.update({
+  id: '/configuraciones',
+  path: '/configuraciones',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCalculadoraRoute = AppCalculadoraRouteImport.update({
+  id: '/calculadora',
+  path: '/calculadora',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
+  id: '/analisis-ventas',
+  path: '/analisis-ventas',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/analisis-ventas': typeof AppAnalisisVentasRoute
+  '/calculadora': typeof AppCalculadoraRoute
+  '/configuraciones': typeof AppConfiguracionesRoute
+  '/costos-operacionales': typeof AppCostosOperacionalesRoute
+  '/costos-productos': typeof AppCostosProductosRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/historial': typeof AppHistorialRoute
+  '/listas-precios': typeof AppListasPreciosRoute
+  '/negocios-fijos': typeof AppNegociosFijosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/analisis-ventas': typeof AppAnalisisVentasRoute
+  '/calculadora': typeof AppCalculadoraRoute
+  '/configuraciones': typeof AppConfiguracionesRoute
+  '/costos-operacionales': typeof AppCostosOperacionalesRoute
+  '/costos-productos': typeof AppCostosProductosRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/historial': typeof AppHistorialRoute
+  '/listas-precios': typeof AppListasPreciosRoute
+  '/negocios-fijos': typeof AppNegociosFijosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/analisis-ventas': typeof AppAnalisisVentasRoute
+  '/_app/calculadora': typeof AppCalculadoraRoute
+  '/_app/configuraciones': typeof AppConfiguracionesRoute
+  '/_app/costos-operacionales': typeof AppCostosOperacionalesRoute
+  '/_app/costos-productos': typeof AppCostosProductosRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/historial': typeof AppHistorialRoute
+  '/_app/listas-precios': typeof AppListasPreciosRoute
+  '/_app/negocios-fijos': typeof AppNegociosFijosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/analisis-ventas'
+    | '/calculadora'
+    | '/configuraciones'
+    | '/costos-operacionales'
+    | '/costos-productos'
+    | '/dashboard'
+    | '/historial'
+    | '/listas-precios'
+    | '/negocios-fijos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login'
-  id: '__root__' | '/' | '/login'
+  to:
+    | '/'
+    | '/login'
+    | '/analisis-ventas'
+    | '/calculadora'
+    | '/configuraciones'
+    | '/costos-operacionales'
+    | '/costos-productos'
+    | '/dashboard'
+    | '/historial'
+    | '/listas-precios'
+    | '/negocios-fijos'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/analisis-ventas'
+    | '/_app/calculadora'
+    | '/_app/configuraciones'
+    | '/_app/costos-operacionales'
+    | '/_app/costos-productos'
+    | '/_app/dashboard'
+    | '/_app/historial'
+    | '/_app/listas-precios'
+    | '/_app/negocios-fijos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
 }
 
@@ -58,6 +181,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -65,11 +195,101 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/negocios-fijos': {
+      id: '/_app/negocios-fijos'
+      path: '/negocios-fijos'
+      fullPath: '/negocios-fijos'
+      preLoaderRoute: typeof AppNegociosFijosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/listas-precios': {
+      id: '/_app/listas-precios'
+      path: '/listas-precios'
+      fullPath: '/listas-precios'
+      preLoaderRoute: typeof AppListasPreciosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/historial': {
+      id: '/_app/historial'
+      path: '/historial'
+      fullPath: '/historial'
+      preLoaderRoute: typeof AppHistorialRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/costos-productos': {
+      id: '/_app/costos-productos'
+      path: '/costos-productos'
+      fullPath: '/costos-productos'
+      preLoaderRoute: typeof AppCostosProductosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/costos-operacionales': {
+      id: '/_app/costos-operacionales'
+      path: '/costos-operacionales'
+      fullPath: '/costos-operacionales'
+      preLoaderRoute: typeof AppCostosOperacionalesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuraciones': {
+      id: '/_app/configuraciones'
+      path: '/configuraciones'
+      fullPath: '/configuraciones'
+      preLoaderRoute: typeof AppConfiguracionesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/calculadora': {
+      id: '/_app/calculadora'
+      path: '/calculadora'
+      fullPath: '/calculadora'
+      preLoaderRoute: typeof AppCalculadoraRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/analisis-ventas': {
+      id: '/_app/analisis-ventas'
+      path: '/analisis-ventas'
+      fullPath: '/analisis-ventas'
+      preLoaderRoute: typeof AppAnalisisVentasRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppAnalisisVentasRoute: typeof AppAnalisisVentasRoute
+  AppCalculadoraRoute: typeof AppCalculadoraRoute
+  AppConfiguracionesRoute: typeof AppConfiguracionesRoute
+  AppCostosOperacionalesRoute: typeof AppCostosOperacionalesRoute
+  AppCostosProductosRoute: typeof AppCostosProductosRoute
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppHistorialRoute: typeof AppHistorialRoute
+  AppListasPreciosRoute: typeof AppListasPreciosRoute
+  AppNegociosFijosRoute: typeof AppNegociosFijosRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAnalisisVentasRoute: AppAnalisisVentasRoute,
+  AppCalculadoraRoute: AppCalculadoraRoute,
+  AppConfiguracionesRoute: AppConfiguracionesRoute,
+  AppCostosOperacionalesRoute: AppCostosOperacionalesRoute,
+  AppCostosProductosRoute: AppCostosProductosRoute,
+  AppDashboardRoute: AppDashboardRoute,
+  AppHistorialRoute: AppHistorialRoute,
+  AppListasPreciosRoute: AppListasPreciosRoute,
+  AppNegociosFijosRoute: AppNegociosFijosRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
