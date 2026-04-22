@@ -14,7 +14,317 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_users: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cost_centers: {
+        Row: {
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_centers_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operational_costs: {
+        Row: {
+          cost_center_id: string
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          id: string
+          percentage: number
+          period_month: string
+          updated_at: string
+          updated_by_id: string | null
+          updated_by_name: string | null
+        }
+        Insert: {
+          cost_center_id: string
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          id?: string
+          percentage: number
+          period_month: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Update: {
+          cost_center_id?: string
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          id?: string
+          percentage?: number
+          period_month?: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_costs_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_costs_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_costs_updated_by_id_fkey"
+            columns: ["updated_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_list_items: {
+        Row: {
+          created_at: string
+          descripcion: string | null
+          id: string
+          precio: number | null
+          price_list_id: string
+          referencia: string
+          unidad_empaque: string | null
+        }
+        Insert: {
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          precio?: number | null
+          price_list_id: string
+          referencia: string
+          unidad_empaque?: string | null
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          precio?: number | null
+          price_list_id?: string
+          referencia?: string
+          unidad_empaque?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_list_items_price_list_id_fkey"
+            columns: ["price_list_id"]
+            isOneToOne: false
+            referencedRelation: "price_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_lists: {
+        Row: {
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          id: string
+          name: string
+          updated_at: string
+          updated_by_id: string | null
+          updated_by_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          id?: string
+          name: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_lists_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_lists_updated_by_id_fkey"
+            columns: ["updated_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_costs: {
+        Row: {
+          cant: number | null
+          cifu: number | null
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          ct: number | null
+          ctmat: number | null
+          ctmo: number | null
+          ctsit: number | null
+          ctu: number | null
+          cumat: number | null
+          cumo: number | null
+          cunago: number | null
+          descripcion: string | null
+          grupo: string | null
+          id: string
+          mou: number | null
+          pct_cto: number | null
+          pct_part: number | null
+          period_month: string
+          preciotot: number | null
+          puv: number | null
+          referencia: string
+          updated_at: string
+          updated_by_id: string | null
+          updated_by_name: string | null
+        }
+        Insert: {
+          cant?: number | null
+          cifu?: number | null
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          ct?: number | null
+          ctmat?: number | null
+          ctmo?: number | null
+          ctsit?: number | null
+          ctu?: number | null
+          cumat?: number | null
+          cumo?: number | null
+          cunago?: number | null
+          descripcion?: string | null
+          grupo?: string | null
+          id?: string
+          mou?: number | null
+          pct_cto?: number | null
+          pct_part?: number | null
+          period_month: string
+          preciotot?: number | null
+          puv?: number | null
+          referencia: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Update: {
+          cant?: number | null
+          cifu?: number | null
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          ct?: number | null
+          ctmat?: number | null
+          ctmo?: number | null
+          ctsit?: number | null
+          ctu?: number | null
+          cumat?: number | null
+          cumo?: number | null
+          cunago?: number | null
+          descripcion?: string | null
+          grupo?: string | null
+          id?: string
+          mou?: number | null
+          pct_cto?: number | null
+          pct_part?: number | null
+          period_month?: string
+          preciotot?: number | null
+          puv?: number | null
+          referencia?: string
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_costs_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_costs_updated_by_id_fkey"
+            columns: ["updated_by_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
