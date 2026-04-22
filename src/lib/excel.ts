@@ -12,7 +12,7 @@ function normalize(s: string): string {
     .toLowerCase();
 }
 
-export type ColumnMap<TKey extends string> = Record<TKey, string[]>;
+export type ColumnMap<TKey extends string> = Record<TKey, readonly string[]>;
 
 export interface ParsedExcelResult<TKey extends string> {
   rows: Record<TKey, string | number | null>[];

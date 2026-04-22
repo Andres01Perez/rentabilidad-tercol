@@ -91,15 +91,17 @@ export function ListasPreciosPage() {
       setLoading(false);
       return;
     }
-    const mapped: PriceList[] = (data ?? []).map((r) => ({
+    const mapped: PriceList[] = (data ?? []).map((r: typeof data extends (infer U)[] ? U : never) => ({
       id: r.id,
       name: r.name,
       created_by_name: r.created_by_name,
       created_at: r.created_at,
       updated_at: r.updated_at,
       updated_by_name: r.updated_by_name,
-      // @ts-expect-error supabase count aggregate
-      items_count: r.price_list_items?.[0]?.count ?? 0,
+      items_count:
+        Array.isArray(r.price_list_items) && r.price_list_items[0]
+          ? (r.price_list_items[0] as { count: number }).count
+          : 0,
     }));
     setLists(mapped);
     setLoading(false);
@@ -496,7 +498,7 @@ function PreviewTable({
         <span className="font-semibold">Vista previa · {preview.rows.length} filas detectadas</span>
       </div>
       {preview.warnings.map((w, i) => (
-        <p key={i} className="mb-1 text-xs text-amber-700">⚠ {w}</p>
+        <p key={i} className="mb-1 text-xs text-muted-foreground">⚠ {w}</p>
       ))}
       <div className="overflow-x-auto">
         <Table>
