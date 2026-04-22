@@ -65,7 +65,7 @@ function AppLayout() {
             <div className="ml-auto flex items-center gap-2">
               <span className="hidden items-center gap-2 rounded-full border border-border/60 bg-white/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur md:inline-flex">
                 <span className="h-1.5 w-1.5 rounded-full bg-gradient-brand" />
-                {user}
+                {user.name}
               </span>
             </div>
           </header>

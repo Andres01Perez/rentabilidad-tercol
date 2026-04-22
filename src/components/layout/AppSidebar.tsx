@@ -108,9 +108,9 @@ export function AppSidebar() {
   };
 
   const initials = user
-    ? user
+    ? user.name
         .split(" ")
-        .map((p) => p[0])
+        .map((p: string) => p[0])
         .slice(0, 2)
         .join("")
         .toUpperCase()
@@ -147,7 +147,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{user ?? "—"}</p>
+              <p className="truncate text-sm font-semibold">{user?.name ?? "—"}</p>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">En sesión</p>
             </div>
           )}
