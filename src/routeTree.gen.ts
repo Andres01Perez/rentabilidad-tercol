@@ -80,7 +80,9 @@ const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
   id: '/analisis-ventas',
   path: '/analisis-ventas',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/analisis-ventas.lazy').then((d) => d.Route),
+)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute

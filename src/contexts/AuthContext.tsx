@@ -1,5 +1,6 @@
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { readStoredSession, writeStoredSession, clearStoredSession } from "@/lib/session";
 
 export interface TercolUser {
   id: string;
@@ -17,26 +18,11 @@ interface AuthContextValue {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
-const STORAGE_KEY = "tercol.activeUser";
-
-function readStoredUser(): TercolUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as TercolUser;
-    if (parsed?.id && parsed?.name) return parsed;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Lazy init: leemos localStorage de forma síncrona. Las rutas autenticadas
   // son ssr:false, así que aquí siempre estamos en el cliente y no hay
   // hydration mismatch.
-  const [user, setUser] = React.useState<TercolUser | null>(() => readStoredUser());
+  const [user, setUser] = React.useState<TercolUser | null>(() => readStoredSession());
   const [appUsers, setAppUsers] = React.useState<TercolUser[]>([]);
 
   const refreshUsers = React.useCallback(async () => {
@@ -59,11 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = React.useCallback((u: TercolUser) => {
     setUser(u);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    } catch {
-      // ignore
-    }
+    writeStoredSession(u);
   }, []);
 
   const createUser = React.useCallback(async (name: string): Promise<TercolUser> => {
@@ -94,11 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = React.useCallback(() => {
     setUser(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    clearStoredSession();
   }, []);
 
   const value = React.useMemo(
