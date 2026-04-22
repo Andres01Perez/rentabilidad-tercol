@@ -30,13 +30,10 @@ function AppLayout() {
     if (ready && !user) navigate({ to: "/login" });
   }, [ready, user, navigate]);
 
-  if (!ready || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-sm text-muted-foreground">Cargando…</div>
-      </div>
-    );
-  }
+  // Sin user no renderizamos el layout (el efecto redirige a /login).
+  // Gracias a la hidratación síncrona en AuthContext, este caso ya no
+  // produce flash de "Cargando…" en el flujo normal.
+  if (!user) return null;
 
   const currentLabel = ROUTE_LABELS[location.pathname] ?? "Tercol";
 

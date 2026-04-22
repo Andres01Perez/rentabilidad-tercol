@@ -83,6 +83,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
   const [pctOperacional, setPctOperacional] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [hasAnySales, setHasAnySales] = React.useState(false);
 
   // Load sales filtered by date range (paginated to bypass 1000-row default)
@@ -113,9 +114,12 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         else from += PAGE;
       }
       if (cancelled) return;
+      // Stale-while-revalidate: solo reemplazamos al éxito, nunca limpiamos
+      // la data anterior mientras llegan los nuevos resultados.
       setSalesRows(all);
       setHasAnySales(all.length > 0);
       setLoading(false);
+      setHasLoadedOnce(true);
     })();
     return () => {
       cancelled = true;
@@ -354,6 +358,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
 
   return {
     loading,
+    hasLoadedOnce,
     hasAnySales,
     pctOperacional,
     salesRows,

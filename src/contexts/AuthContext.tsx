@@ -20,9 +20,24 @@ const AuthContext = React.createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = "tercol.activeUser";
 
+function readStoredUser(): TercolUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TercolUser;
+    if (parsed?.id && parsed?.name) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<TercolUser | null>(null);
-  const [ready, setReady] = React.useState(false);
+  // Lazy init: leemos localStorage de forma síncrona para evitar el flash
+  // de "Cargando…" en cada recarga del cliente.
+  const [user, setUser] = React.useState<TercolUser | null>(() => readStoredUser());
+  const [ready, setReady] = React.useState<boolean>(() => typeof window !== "undefined");
   const [appUsers, setAppUsers] = React.useState<TercolUser[]>([]);
 
   const refreshUsers = React.useCallback(async () => {
@@ -39,20 +54,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    // Hidratar inmediatamente desde localStorage para no bloquear render.
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as TercolUser;
-        if (parsed?.id && parsed?.name) setUser(parsed);
-      }
-    } catch {
-      // ignore
+    // En SSR `ready` arranca en false; al hidratar marcamos ready y
+    // sincronizamos por si localStorage cambió entre renders.
+    if (!ready) {
+      setUser(readStoredUser());
+      setReady(true);
     }
-    setReady(true);
     // Cargar usuarios en background (solo necesario para /login).
     void refreshUsers();
-  }, [refreshUsers]);
+  }, [refreshUsers, ready]);
 
   const login = React.useCallback((u: TercolUser) => {
     setUser(u);
