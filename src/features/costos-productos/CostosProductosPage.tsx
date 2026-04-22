@@ -129,6 +129,7 @@ export function CostosProductosPage() {
       setLoading(false);
       return;
     }
+    // Stale-while-revalidate: solo reemplazamos al recibir respuesta exitosa.
     setRows((data ?? []) as ProductCost[]);
     setLoading(false);
   }, [month]);
@@ -175,12 +176,13 @@ export function CostosProductosPage() {
             className="pl-9"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          {loading && rows.length > 0 && <Loader2 className="h-3 w-3 animate-spin" />}
           {formatMonth(month)} · {filtered.length} productos
         </p>
       </div>
 
-      <div className="mt-4 glass overflow-hidden rounded-2xl">
+      <div className={cn("mt-4 glass overflow-hidden rounded-2xl transition-opacity", loading && rows.length > 0 && "opacity-60")}>
         <div className="max-h-[calc(100vh-280px)] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
@@ -193,7 +195,7 @@ export function CostosProductosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {loading && rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={COLUMNS.length} className="h-32 text-center text-muted-foreground">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />

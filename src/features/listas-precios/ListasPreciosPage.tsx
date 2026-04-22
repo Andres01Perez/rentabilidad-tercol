@@ -42,6 +42,7 @@ import {
 import { Dropzone } from "@/components/excel/Dropzone";
 import { parseExcel, chunkedInsert } from "@/lib/excel";
 import { formatCurrency } from "@/lib/period";
+import { cn } from "@/lib/utils";
 
 type PriceList = {
   id: string;
@@ -140,7 +141,7 @@ export function ListasPreciosPage() {
         }
       />
 
-      <div className="mt-8 glass rounded-2xl p-1">
+      <div className={cn("mt-8 glass rounded-2xl p-1 transition-opacity", loading && lists.length > 0 && "opacity-60")}>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -153,7 +154,7 @@ export function ListasPreciosPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {loading && lists.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />

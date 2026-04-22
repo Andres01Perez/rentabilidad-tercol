@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { currentMonthDate, formatMonth, previousMonth, formatPercent } from "@/lib/period";
+import { cn } from "@/lib/utils";
 
 type CostCenter = {
   id: string;
@@ -108,6 +109,7 @@ function AssignmentsTab() {
       updated_by_name: r.updated_by_name,
       created_by_name: r.created_by_name,
     }));
+    // Stale-while-revalidate: el estado anterior queda visible hasta el éxito.
     setAssignments(mapped);
     setLoading(false);
   }, [month]);
@@ -133,12 +135,13 @@ function AssignmentsTab() {
           <Plus className="mr-1 h-4 w-4" />
           Asignar centro
         </Button>
-        <p className="ml-auto text-xs text-muted-foreground">
+        <p className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {loading && assignments.length > 0 && <Loader2 className="h-3 w-3 animate-spin" />}
           {formatMonth(month)} · Total asignado: <span className="font-semibold text-foreground">{formatPercent(total)}</span>
         </p>
       </div>
 
-      <div className="mt-4 glass rounded-2xl p-1">
+      <div className={cn("mt-4 glass rounded-2xl p-1 transition-opacity", loading && assignments.length > 0 && "opacity-60")}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -150,7 +153,7 @@ function AssignmentsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {loading && assignments.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
