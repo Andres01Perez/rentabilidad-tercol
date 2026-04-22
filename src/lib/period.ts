@@ -72,3 +72,21 @@ export function formatPercent(n: number | null | undefined, decimals = 2): strin
     maximumFractionDigits: decimals,
   }).format(n)}%`;
 }
+
+/** Parse "YYYY-MM-DD" into a local Date (no timezone shift). */
+export function parseDateString(value: string): Date {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Format "YYYY-MM-DD" as "DD/MM/YYYY". */
+export function formatDay(value: string): string {
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** Format "YYYY-MM-DD" as short "DD MMM" in Spanish. */
+export function formatDayShort(value: string): string {
+  const d = parseDateString(value);
+  return new Intl.DateTimeFormat("es-CO", { day: "2-digit", month: "short" }).format(d);
+}

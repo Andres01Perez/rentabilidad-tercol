@@ -325,6 +325,60 @@ export type Database = {
           },
         ]
       }
+      sales: {
+        Row: {
+          cantidad: number
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          day: number
+          dependencia: string | null
+          id: string
+          month: number
+          precio_unitario: number | null
+          referencia: string
+          sale_date: string
+          tercero: string | null
+          valor_total: number
+          vendedor: string | null
+          year: number
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          day: number
+          dependencia?: string | null
+          id?: string
+          month: number
+          precio_unitario?: number | null
+          referencia: string
+          sale_date: string
+          tercero?: string | null
+          valor_total: number
+          vendedor?: string | null
+          year: number
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          day?: number
+          dependencia?: string | null
+          id?: string
+          month?: number
+          precio_unitario?: number | null
+          referencia?: string
+          sale_date?: string
+          tercero?: string | null
+          valor_total?: number
+          vendedor?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
