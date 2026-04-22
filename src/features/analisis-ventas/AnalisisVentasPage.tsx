@@ -231,6 +231,13 @@ export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [range, setRange] = React.useState<DateRange>({ from: null, to: null });
+  // Rango debounced (300ms) para evitar reconsultas en cascada al ajustar
+  // dos fechas seguidas.
+  const [debouncedRange, setDebouncedRange] = React.useState<DateRange>(range);
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedRange(range), 300);
+    return () => clearTimeout(t);
+  }, [range]);
   const [costPeriod, setCostPeriod] = React.useState<string>(currentMonthDate());
   const [opPeriod, setOpPeriod] = React.useState<string>(currentMonthDate());
   const [vendedoresF, setVendedoresF] = React.useState<string[]>([]);
@@ -239,7 +246,7 @@ export function AnalisisVentasPage() {
   const [search, setSearch] = React.useState("");
 
   const analytics = useSalesAnalytics({
-    range,
+    range: debouncedRange,
     costPeriodMonth: costPeriod,
     opPeriodMonth: opPeriod,
     filters: {
@@ -280,7 +287,7 @@ export function AnalisisVentasPage() {
         }
       />
 
-      {analytics.loading ? (
+      {analytics.loading && !analytics.hasLoadedOnce ? (
         <div className="flex h-64 items-center justify-center text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando análisis…
         </div>
@@ -298,6 +305,12 @@ export function AnalisisVentasPage() {
         </div>
       ) : (
         <>
+          {/* Barra de progreso sutil durante recargas no destructivas */}
+          {analytics.loading && (
+            <div className="sticky top-0 z-30 -mb-6 h-0.5 overflow-hidden">
+              <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
+            </div>
+          )}
           {/* Filtros sticky */}
           <div className="glass sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
             <DateRangePicker value={range} onChange={setRange} />
