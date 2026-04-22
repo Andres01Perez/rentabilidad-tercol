@@ -263,8 +263,8 @@ export function AnalisisVentasPage() {
     return arr.slice(0, 500);
   }, [analytics.filteredRows, search]);
 
-  const tooltipFormatter = (v: number | string) =>
-    typeof v === "number" ? formatCurrency(v) : v;
+  const tooltipFormatter = (v: unknown) =>
+    typeof v === "number" ? formatCurrency(v) : String(v ?? "");
 
   return (
     <div className="space-y-8">
