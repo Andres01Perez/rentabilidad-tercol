@@ -312,7 +312,7 @@ function CreateListDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva lista de precios</DialogTitle>
           <DialogDescription>
@@ -436,7 +436,7 @@ function ReplaceListDialog({
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Reemplazar Excel — {list.name}</DialogTitle>
             <DialogDescription>
