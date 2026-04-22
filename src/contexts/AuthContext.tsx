@@ -39,19 +39,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    (async () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as TercolUser;
-          if (parsed?.id && parsed?.name) setUser(parsed);
-        }
-      } catch {
-        // ignore
+    // Hidratar inmediatamente desde localStorage para no bloquear render.
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as TercolUser;
+        if (parsed?.id && parsed?.name) setUser(parsed);
       }
-      await refreshUsers();
-      setReady(true);
-    })();
+    } catch {
+      // ignore
+    }
+    setReady(true);
+    // Cargar usuarios en background (solo necesario para /login).
+    void refreshUsers();
   }, [refreshUsers]);
 
   const login = React.useCallback((u: TercolUser) => {

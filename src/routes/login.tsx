@@ -67,9 +67,8 @@ function LoginPage() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background">
       {/* Decorative gradient orbs */}
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[36rem] w-[36rem] rounded-full bg-[radial-gradient(circle,oklch(0.55_0.22_295/0.35),transparent_70%)] blur-3xl" />
-      <div className="pointer-events-none absolute top-1/3 -right-40 h-[40rem] w-[40rem] rounded-full bg-[radial-gradient(circle,oklch(0.62_0.18_250/0.30),transparent_70%)] blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 left-1/3 h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle,oklch(0.72_0.18_55/0.28),transparent_70%)] blur-3xl" />
+      <div className="pointer-events-none absolute -top-40 -left-40 h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,oklch(0.55_0.22_295/0.30),transparent_70%)] blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 right-0 h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,oklch(0.72_0.18_55/0.25),transparent_70%)] blur-3xl" />
 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-md">

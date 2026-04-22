@@ -73,9 +73,6 @@ export function PagePlaceholder({
 }: PagePlaceholderProps) {
   return (
     <div className="relative min-h-full">
-      {/* Decorative gradient orb */}
-      <div className="pointer-events-none absolute -top-20 right-0 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,oklch(0.55_0.22_295/0.10),transparent_70%)] blur-3xl" />
-
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 lg:px-10 lg:py-14">
         {/* Hero */}
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">

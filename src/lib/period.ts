@@ -1,0 +1,74 @@
+const MONTHS_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/** Returns "YYYY-MM-01" string (date-safe, no timezone). */
+export function monthToDate(year: number, monthIndex: number): string {
+  const m = String(monthIndex + 1).padStart(2, "0");
+  return `${year}-${m}-01`;
+}
+
+export function currentMonthDate(): string {
+  const d = new Date();
+  return monthToDate(d.getFullYear(), d.getMonth());
+}
+
+/** Format a "YYYY-MM-DD" or Date into "Abril 2026". */
+export function formatMonth(value: string | Date): string {
+  const [y, m] = typeof value === "string"
+    ? value.split("-").map(Number)
+    : [value.getFullYear(), value.getMonth() + 1];
+  return `${MONTHS_ES[(m ?? 1) - 1]} ${y}`;
+}
+
+/** Returns last N months, most recent first, as { value: "YYYY-MM-01", label }. */
+export function lastNMonths(n = 24): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = monthToDate(d.getFullYear(), d.getMonth());
+    out.push({ value, label: formatMonth(value) });
+  }
+  return out;
+}
+
+/** Subtract one month. Accepts "YYYY-MM-DD" or "YYYY-MM-01". */
+export function previousMonth(value: string): string {
+  const [y, m] = value.split("-").map(Number);
+  const d = new Date(y, (m ?? 1) - 2, 1);
+  return monthToDate(d.getFullYear(), d.getMonth());
+}
+
+export function formatNumber(n: number | null | undefined, opts?: Intl.NumberFormatOptions): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat("es-CO", opts).format(n);
+}
+
+export function formatCurrency(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+export function formatPercent(n: number | null | undefined, decimals = 2): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return `${new Intl.NumberFormat("es-CO", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n)}%`;
+}

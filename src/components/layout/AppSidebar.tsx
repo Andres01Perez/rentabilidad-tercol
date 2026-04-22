@@ -53,7 +53,15 @@ const sistema: NavItem[] = [
   { title: "Configuraciones", to: "/configuraciones", icon: Settings },
 ];
 
-function NavGroup({ label, items, currentPath }: { label: string; items: NavItem[]; currentPath: string }) {
+const NavGroup = React.memo(function NavGroup({
+  label,
+  items,
+  currentPath,
+}: {
+  label: string;
+  items: NavItem[];
+  currentPath: string;
+}) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   return (
@@ -93,7 +101,7 @@ function NavGroup({ label, items, currentPath }: { label: string; items: NavItem
       </SidebarGroupContent>
     </SidebarGroup>
   );
-}
+});
 
 export function AppSidebar() {
   const location = useLocation();
