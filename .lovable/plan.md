@@ -1,111 +1,74 @@
 
-# Análisis de ventas — Importación + Dashboard cruzado
 
-## Parte 1 — Base de datos
+# Diagnóstico: por qué aparece "Cargando…" tan seguido
 
-### Nueva tabla `sales`
-Una fila por línea de venta del Excel. Reemplazo total en cada importación (sin histórico de cargas).
+## Causas
 
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | uuid PK | `gen_random_uuid()` |
-| `sale_date` | date NOT NULL | Construida desde año+mes+día |
-| `year` | int NOT NULL | Para agregaciones rápidas |
-| `month` | int NOT NULL | 1–12 |
-| `day` | int NOT NULL | 1–31 |
-| `vendedor` | text | |
-| `dependencia` | text | |
-| `tercero` | text | Cliente |
-| `referencia` | text NOT NULL | Mapea a "ProductoC" — clave para cruzar con costos/precios |
-| `cantidad` | numeric(14,4) NOT NULL | |
-| `valor_total` | numeric(14,2) NOT NULL | Mapea a "Valor" (total de la línea) |
-| `precio_unitario` | numeric(14,2) GENERATED ALWAYS AS (CASE WHEN cantidad <> 0 THEN valor_total/cantidad ELSE NULL END) STORED | Calculado |
-| `created_by_id`, `created_by_name` | uuid + text | Trazabilidad |
-| `created_at` | timestamptz default now() | |
+Hay **tres lugares** que muestran ese estado, cada uno con un disparador distinto:
 
-**Índices** para acelerar el dashboard:
-- `(year, month)`, `(sale_date)`, `(referencia)`, `(vendedor)`, `(dependencia)`, `(tercero)`.
+### 1. El más visible — `_app.tsx` (gate de autenticación)
+```tsx
+if (!ready || !user) {
+  return <div>Cargando…</div>;
+}
+```
+Aunque `AuthContext` hidrata desde `localStorage` y marca `ready=true` rápido, este flash aparece **en cada recarga dura** (F5, abrir pestaña nueva, navegación directa por URL) durante el primer render del cliente. En SSR `localStorage` no existe, así que el servidor renderiza el árbol con `user=null`; al hidratar en el cliente lee localStorage y re-renderiza. Ese gap es el "Cargando…" que ves.
 
-**RLS**: políticas abiertas para `anon` (consistente con las demás tablas; documentado como temporal).
+Además, si `localStorage` está vacío (otro navegador, modo incógnito, sesión limpia) el `useEffect` redirige a `/login` pero entre el render inicial y el `navigate` se alcanza a pintar el spinner.
 
-**Comportamiento de carga**: cada subida hace `DELETE FROM sales` completo + `INSERT` por lotes (chunks de 500). Confirmación obligatoria en UI antes de borrar.
+### 2. `AnalisisVentasPage.tsx`
+```tsx
+{analytics.loading ? <>Cargando análisis…</> : ...}
+```
+El hook `useSalesAnalytics` arranca con `loading=true` y hace 3 fetches paginados en cascada (`sales`, `product_costs`, `operational_costs`). Cada vez que cambias el rango de fechas o el mes seleccionado vuelve a ponerse en `loading` y muestra el placeholder durante toda la consulta.
 
----
+### 3. Páginas de listas/costos
+`ListasPreciosPage`, `CostosProductosPage`, `CostosOperacionalesPage` muestran spinners propios mientras consultan Supabase al montar y al cambiar de mes.
 
-## Parte 2 — Vista `/analisis-ventas`
+## Resumen de por qué se siente "tan seguido"
 
-Reemplaza el placeholder actual. Layout en tres bloques:
+- **Recargas y navegación directa**: flash del gate de auth (#1).
+- **Cambiar mes/rango en análisis**: el dashboard entero se reemplaza por el spinner (#2).
+- **Cambiar mes en costos/operacionales**: las tablas se vacían mientras llega la respuesta (#3).
 
-### A. Header de control
-- Botón **"Subir Excel de ventas"** → dialog con dropzone, vista previa de filas detectadas y warnings, modal de confirmación "Esto reemplazará TODAS las ventas actuales (N filas). ¿Continuar?".
-- Mapeo tolerante de columnas (acentos/case): `año|year`, `mes|month`, `dia|day|día`, `vendedor`, `dependencia`, `tercero`, `productoc|producto`, `valor|valor total`, `cantidad|cant`.
-- Validación: filas sin año/mes/día/referencia/cantidad/valor se descartan con warning.
+Ninguno indica un fallo real — son estados de carga legítimos pero con UX brusca (todo el contenido desaparece y reaparece).
 
-### B. Filtros del dashboard (sticky)
-- **Rango de fechas**: selector "Desde / Hasta" o atajos (Mes actual, Año actual, Todo).
-- **Mes de costos a cruzar**: `MonthSelect` que carga `product_costs` de ese mes (CTU por referencia → costo unitario).
-- **Mes de costos operacionales a cruzar**: `MonthSelect` que carga `operational_costs` de ese mes (suma de `percentage` de centros activos → % aplicado al margen bruto).
-- Filtros opcionales: vendedor, dependencia, tercero (multi-select desde valores únicos en `sales`).
+## Plan de mejoras
 
-### C. KPIs y gráficos (estilo Power BI)
+### A. Eliminar el flash del gate de auth (#1)
+1. **Hidratar `user` de forma síncrona** en `useState` (lazy initializer) en vez de en `useEffect`. Así en el primer render del cliente ya hay `user` si existe en localStorage, sin pasar por el gate.
+   ```tsx
+   const [user, setUser] = useState<TercolUser | null>(() => {
+     if (typeof window === "undefined") return null;
+     try {
+       const raw = localStorage.getItem(STORAGE_KEY);
+       return raw ? JSON.parse(raw) : null;
+     } catch { return null; }
+   });
+   const [ready, setReady] = useState(typeof window !== "undefined");
+   ```
+2. **Redirigir a `/login` en `beforeLoad`** del route layout `_app` en vez de en un `useEffect`, para que el primer render ya sepa si hay sesión y no muestre el spinner.
+3. **Quitar el spinner por completo del `_app.tsx`** una vez la hidratación es síncrona — si no hay user, redirige; si hay, renderiza directo.
 
-**Fila 1 — KPIs (cards con gradiente)**:
-- Ventas totales (Σ valor_total).
-- Costo total (Σ cantidad × CTU del mes seleccionado, por referencia).
-- Margen bruto absoluto y %.
-- Margen neto: margen bruto × (1 − % operacional del mes seleccionado).
-- # Productos vendidos, # Clientes, # Vendedores activos.
+### B. Carga no destructiva en `/analisis-ventas` (#2)
+1. **Mantener visible el dashboard anterior** mientras llegan datos nuevos (patrón "stale while revalidating"): no reemplazar todo por el spinner cuando `loading=true` y ya hay `salesRows` cacheados.
+2. **Indicador sutil**: una barra de progreso fina arriba del header de filtros (animada) en vez de pantalla en blanco.
+3. **Sólo mostrar el spinner grande la primera vez** (cuando `salesRows.length === 0 && loading`).
+4. **Debounce** del cambio de rango de fechas (300ms) para evitar reconsultas en cascada al ajustar dos fechas seguidas.
 
-**Fila 2 — Series temporales**:
-- Línea: Ventas vs Costo vs Margen por mes (recharts `LineChart`).
-- Barras: Ventas por día (drill del mes seleccionado, recharts `BarChart`).
+### C. Carga no destructiva en costos/listas (#3)
+- Mismo patrón: si ya hay datos del mes anterior visibles, dejarlos atenuados (`opacity-60`) con un spinner pequeño en el header en vez de vaciar la tabla.
 
-**Fila 3 — Rankings (tablas + barras horizontales)**:
-- Top 10 **vendedores** por margen.
-- Top 10 **dependencias** por margen.
-- Top 10 **terceros (clientes)** por margen.
-- Top 10 **productos** por margen, con alerta si margen % < 0 (rojo).
-
-**Fila 4 — Tabla detalle**:
-- Tabla con scroll y buscador (referencia/tercero/vendedor) mostrando: fecha, vendedor, dependencia, tercero, ref, cantidad, PUV (precio unitario calculado), CTU del mes, margen unitario, margen %.
-
-### Lógica de cruces (cliente)
-1. Cargar `sales` filtradas por rango → `salesRows`.
-2. Cargar `product_costs` del mes seleccionado → `Map<referencia, ctu>`.
-3. Cargar `operational_costs` del mes operacional → `pctOperacional = sum(percentage)`.
-4. Para cada `salesRow`: `costoLinea = cantidad × (ctu ?? 0)`; `margenBruto = valor_total − costoLinea`.
-5. Agregaciones se hacen en memoria con `useMemo` (Maps por dimensión). Para volúmenes grandes (decenas de miles), todo cabe holgadamente en cliente.
-
-### Estado vacío
-Si no hay ventas: card central con CTA "Subir Excel de ventas".
-
----
-
-## Parte 3 — Helpers y componentes
-
-- **`src/components/period/DateRangePicker.tsx`**: selector "Desde/Hasta" basado en `react-day-picker` (ya instalado) + atajos.
-- **`src/features/analisis-ventas/AnalisisVentasPage.tsx`**: vista principal.
-- **`src/features/analisis-ventas/UploadVentasDialog.tsx`**: dropzone + parseo + confirmación.
-- **`src/features/analisis-ventas/useSalesAnalytics.ts`**: hook que hace los 3 fetches y devuelve series/rankings memoizados.
-- **`src/lib/period.ts`**: agregar helpers `parseDateString("YYYY-MM-DD")` y `formatDay` si hace falta.
-- **Recharts directo**: usar `LineChart`, `BarChart`, `Tooltip`, `XAxis`, `YAxis`, `ResponsiveContainer` sin pasar por `@/components/ui/chart` (ese wrapper tiene un error de tipos conocido con la versión actual de recharts y se evita por completo).
-
-## Parte 4 — Ruta
-
-Actualizar `src/routes/_app/analisis-ventas.tsx` para apuntar a `AnalisisVentasPage` (hoy es un `PagePlaceholder`).
-
----
-
-## Notas
-
-- **Reemplazo total** de `sales` en cada carga (acordado): no se guarda `period_month` agregado porque el Excel ya trae las fechas exactas; el dashboard filtra por rango sobre `sale_date`.
-- El precio unitario se calcula como columna generada en BD (`valor_total/cantidad`) para que cualquier consulta lo tenga listo.
-- El campo "ProductoC" del Excel se almacena como `referencia` para que coincida exactamente con `product_costs.referencia` y el cruce sea directo.
-- RLS abierta como en el resto del proyecto; documentar aviso de seguridad pendiente para producción.
+### D. Opcional pero recomendado
+- Migrar los fetches del dashboard a **TanStack Query** (`useQuery` con `placeholderData: keepPreviousData`) para que el cache + transición suave funcionen "gratis" sin escribir lógica manual de `previousData`. El proyecto ya tiene la dependencia y `QueryClientProvider` se monta en el root sin tocar nada más en componentes ya escritos.
 
 ## Entregables
 
-1. Migración: tabla `sales` con índices, columna generada y RLS abierta.
-2. Página `/analisis-ventas` con upload + filtros + KPIs + 4 filas de visualizaciones + tabla detalle.
-3. Componentes nuevos: `DateRangePicker`, `UploadVentasDialog`, hook `useSalesAnalytics`.
-4. Mapeo tolerante para las 9 columnas del Excel.
+1. `AuthContext.tsx`: hidratación síncrona de `user` con lazy `useState`.
+2. `_app.tsx`: eliminar el bloque `if (!ready || !user) Cargando…` y mover el guard a `beforeLoad` de la ruta.
+3. `AnalisisVentasPage.tsx`: spinner solo en la carga inicial; barra de progreso superior durante recargas; debounce del `DateRangePicker`.
+4. `useSalesAnalytics.ts`: no resetear `salesRows` mientras llegan los nuevos (mantener `setSalesRows` solo al éxito).
+5. (Opcional) Refactor de los hooks de fetch a TanStack Query con `keepPreviousData`.
+
+Confirma si quieres que aplique solo los puntos 1–4 (rápidos y conservadores) o que incluya también el #5 (refactor más ambicioso pero más limpio a futuro).
+
