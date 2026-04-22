@@ -274,7 +274,7 @@ export function AnalisisVentasPage() {
     typeof v === "number" ? formatCurrency(v) : String(v ?? "");
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-[1600px] space-y-8 px-6 py-10 lg:px-10">
       <PageHeader
         icon={TrendingUp}
         eyebrow="Análisis"
@@ -307,12 +307,12 @@ export function AnalisisVentasPage() {
         <>
           {/* Barra de progreso sutil durante recargas no destructivas */}
           {analytics.loading && (
-            <div className="sticky top-0 z-30 -mb-6 h-0.5 overflow-hidden">
+            <div className="-mb-6 h-0.5 overflow-hidden rounded-full">
               <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
             </div>
           )}
           {/* Filtros sticky */}
-          <div className="glass sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
+          <div className="glass sticky top-16 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
             <DateRangePicker value={range} onChange={setRange} />
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
