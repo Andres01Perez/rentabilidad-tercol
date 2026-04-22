@@ -117,7 +117,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       // Stale-while-revalidate: solo reemplazamos al éxito, nunca limpiamos
       // la data anterior mientras llegan los nuevos resultados.
       setSalesRows(all);
-      setHasAnySales(all.length > 0);
+      if (all.length > 0) setHasAnySales(true);
       setLoading(false);
       setHasLoadedOnce(true);
     })();
@@ -126,11 +126,11 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [range.from, range.to, refreshKey]);
 
-  // If no sales in range, double-check global existence (for empty state UX)
+  // Chequeo global de existencia de ventas — solo una vez al montar (y al
+  // forzar refresh). Evita reconsultas en cascada y parpadeos del estado vacío.
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (salesRows.length > 0) return;
       const { count } = await supabase
         .from("sales")
         .select("id", { count: "exact", head: true });
@@ -139,7 +139,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     return () => {
       cancelled = true;
     };
-  }, [salesRows.length, refreshKey]);
+  }, [refreshKey]);
 
   // Load product_costs for selected month → Map<referencia, ctu>
   React.useEffect(() => {

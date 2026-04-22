@@ -1,11 +1,28 @@
 import * as React from "react";
-import { createFileRoute, Outlet, useNavigate, useLocation, Link } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, Link, redirect } from "@tanstack/react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChevronRight } from "lucide-react";
 
+const AUTH_STORAGE_KEY = "tercol.activeUser";
+
 export const Route = createFileRoute("/_app")({
+  // Las vistas autenticadas dependen de localStorage. Renderizarlas en el
+  // servidor causa un hydration mismatch (server=null user, client=hydrated)
+  // que provoca re-monte total del árbol y rompe los chunks lazy.
+  ssr: false,
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!raw) throw redirect({ to: "/login" });
+    } catch (e) {
+      // Re-lanzar redirects de TanStack para que no se traguen
+      if (e && typeof e === "object" && "to" in (e as object)) throw e;
+      throw redirect({ to: "/login" });
+    }
+  },
   component: AppLayout,
 });
 
@@ -22,17 +39,13 @@ const ROUTE_LABELS: Record<string, string> = {
 };
 
 function AppLayout() {
-  const { user, ready } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const location = useLocation();
 
-  React.useEffect(() => {
-    if (ready && !user) navigate({ to: "/login" });
-  }, [ready, user, navigate]);
-
-  // Sin user no renderizamos el layout (el efecto redirige a /login).
-  // Gracias a la hidratación síncrona en AuthContext, este caso ya no
-  // produce flash de "Cargando…" en el flujo normal.
+  // El guard de beforeLoad ya garantiza que existe sesión en localStorage,
+  // y como esta ruta es ssr:false el lazy-init de AuthContext entrega el
+  // user inmediatamente. Si por alguna razón no hay user, no renderizamos
+  // (beforeLoad redirige).
   if (!user) return null;
 
   const currentLabel = ROUTE_LABELS[location.pathname] ?? "Tercol";

@@ -26,15 +26,15 @@ export const Route = createFileRoute("/login")({
 const OTHERS_OPTION = "__others__";
 
 function LoginPage() {
-  const { user, login, ready, appUsers, createUser } = useAuth();
+  const { user, login, appUsers, createUser } = useAuth();
   const navigate = useNavigate();
   const [selected, setSelected] = React.useState<string>("");
   const [newName, setNewName] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
-    if (ready && user) navigate({ to: "/dashboard" });
-  }, [ready, user, navigate]);
+    if (user) navigate({ to: "/dashboard" });
+  }, [user, navigate]);
 
   const isOthers = selected === OTHERS_OPTION;
   const canSubmit = !submitting && (isOthers ? newName.trim().length > 0 : selected.length > 0);
