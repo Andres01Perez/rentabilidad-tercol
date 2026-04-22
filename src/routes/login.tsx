@@ -1,6 +1,7 @@
 import * as React from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { readStoredSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +21,12 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Selecciona tu usuario para acceder a la plataforma de rentabilidad de Tercol." },
     ],
   }),
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    if (readStoredSession()) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: LoginPage,
 });
 
@@ -33,7 +40,7 @@ function LoginPage() {
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
-    if (user) navigate({ to: "/dashboard" });
+    if (user) navigate({ to: "/dashboard", replace: true });
   }, [user, navigate]);
 
   const isOthers = selected === OTHERS_OPTION;
@@ -55,7 +62,7 @@ function LoginPage() {
         }
         login(found);
       }
-      navigate({ to: "/dashboard" });
+      navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       console.error(err);
       toast.error("No se pudo iniciar sesión");

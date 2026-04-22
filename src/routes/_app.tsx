@@ -4,8 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChevronRight } from "lucide-react";
-
-const AUTH_STORAGE_KEY = "tercol.activeUser";
+import { readStoredSession } from "@/lib/session";
 
 export const Route = createFileRoute("/_app")({
   // Las vistas autenticadas dependen de localStorage. Renderizarlas en el
@@ -14,14 +13,8 @@ export const Route = createFileRoute("/_app")({
   ssr: false,
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!raw) throw redirect({ to: "/login" });
-    } catch (e) {
-      // Re-lanzar redirects de TanStack para que no se traguen
-      if (e && typeof e === "object" && "to" in (e as object)) throw e;
-      throw redirect({ to: "/login" });
-    }
+    const session = readStoredSession();
+    if (!session) throw redirect({ to: "/login" });
   },
   component: AppLayout,
 });
