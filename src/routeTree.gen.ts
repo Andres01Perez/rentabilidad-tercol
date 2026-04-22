@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppNegociosFijosRouteImport } from './routes/_app/negocios-fijos'
 import { Route as AppListasPreciosRouteImport } from './routes/_app/listas-precios'
 import { Route as AppHistorialRouteImport } from './routes/_app/historial'
@@ -29,6 +30,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppNegociosFijosRoute = AppNegociosFijosRouteImport.update({
   id: '/negocios-fijos',
@@ -77,7 +83,7 @@ const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AppRouteWithChildren
+  '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/analisis-ventas': typeof AppAnalisisVentasRoute
   '/calculadora': typeof AppCalculadoraRoute
@@ -90,7 +96,6 @@ export interface FileRoutesByFullPath {
   '/negocios-fijos': typeof AppNegociosFijosRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/analisis-ventas': typeof AppAnalisisVentasRoute
   '/calculadora': typeof AppCalculadoraRoute
@@ -101,6 +106,7 @@ export interface FileRoutesByTo {
   '/historial': typeof AppHistorialRoute
   '/listas-precios': typeof AppListasPreciosRoute
   '/negocios-fijos': typeof AppNegociosFijosRoute
+  '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,6 +121,7 @@ export interface FileRoutesById {
   '/_app/historial': typeof AppHistorialRoute
   '/_app/listas-precios': typeof AppListasPreciosRoute
   '/_app/negocios-fijos': typeof AppNegociosFijosRoute
+  '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -132,7 +139,6 @@ export interface FileRouteTypes {
     | '/negocios-fijos'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/login'
     | '/analisis-ventas'
     | '/calculadora'
@@ -143,6 +149,7 @@ export interface FileRouteTypes {
     | '/historial'
     | '/listas-precios'
     | '/negocios-fijos'
+    | '/'
   id:
     | '__root__'
     | '/_app'
@@ -156,6 +163,7 @@ export interface FileRouteTypes {
     | '/_app/historial'
     | '/_app/listas-precios'
     | '/_app/negocios-fijos'
+    | '/_app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -178,6 +186,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/': {
+      id: '/_app/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/negocios-fijos': {
       id: '/_app/negocios-fijos'
@@ -255,6 +270,7 @@ interface AppRouteChildren {
   AppHistorialRoute: typeof AppHistorialRoute
   AppListasPreciosRoute: typeof AppListasPreciosRoute
   AppNegociosFijosRoute: typeof AppNegociosFijosRoute
+  AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -267,6 +283,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHistorialRoute: AppHistorialRoute,
   AppListasPreciosRoute: AppListasPreciosRoute,
   AppNegociosFijosRoute: AppNegociosFijosRoute,
+  AppIndexRoute: AppIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
