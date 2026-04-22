@@ -10,7 +10,6 @@ interface AuthContextValue {
   user: TercolUser | null;
   login: (user: TercolUser) => void;
   logout: () => void;
-  ready: boolean;
   appUsers: TercolUser[];
   refreshUsers: () => Promise<void>;
   createUser: (name: string) => Promise<TercolUser>;
@@ -34,10 +33,10 @@ function readStoredUser(): TercolUser | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Lazy init: leemos localStorage de forma síncrona para evitar el flash
-  // de "Cargando…" en cada recarga del cliente.
+  // Lazy init: leemos localStorage de forma síncrona. Las rutas autenticadas
+  // son ssr:false, así que aquí siempre estamos en el cliente y no hay
+  // hydration mismatch.
   const [user, setUser] = React.useState<TercolUser | null>(() => readStoredUser());
-  const [ready, setReady] = React.useState<boolean>(() => typeof window !== "undefined");
   const [appUsers, setAppUsers] = React.useState<TercolUser[]>([]);
 
   const refreshUsers = React.useCallback(async () => {
@@ -54,15 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    // En SSR `ready` arranca en false; al hidratar marcamos ready y
-    // sincronizamos por si localStorage cambió entre renders.
-    if (!ready) {
-      setUser(readStoredUser());
-      setReady(true);
-    }
     // Cargar usuarios en background (solo necesario para /login).
     void refreshUsers();
-  }, [refreshUsers, ready]);
+  }, [refreshUsers]);
 
   const login = React.useCallback((u: TercolUser) => {
     setUser(u);
@@ -109,8 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = React.useMemo(
-    () => ({ user, login, logout, ready, appUsers, refreshUsers, createUser }),
-    [user, login, logout, ready, appUsers, refreshUsers, createUser]
+    () => ({ user, login, logout, appUsers, refreshUsers, createUser }),
+    [user, login, logout, appUsers, refreshUsers, createUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
