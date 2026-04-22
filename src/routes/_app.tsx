@@ -43,9 +43,8 @@ function AppLayout() {
   return (
     <SidebarProvider>
       <div className="relative flex min-h-screen w-full bg-background">
-        {/* Decorative fixed orb */}
-        <div className="pointer-events-none fixed -top-32 right-0 h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle,oklch(0.62_0.18_250/0.10),transparent_70%)] blur-3xl" />
-        <div className="pointer-events-none fixed bottom-0 left-1/4 h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,oklch(0.72_0.18_55/0.08),transparent_70%)] blur-3xl" />
+        {/* Decorative fixed orb (un solo orbe, más liviano) */}
+        <div className="pointer-events-none fixed -top-32 right-0 h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,oklch(0.62_0.18_250/0.10),transparent_70%)] blur-3xl" />
 
         <AppSidebar />
 
