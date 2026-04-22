@@ -1,120 +1,62 @@
 
-Objetivo: cerrar de forma definitiva el error de `/analisis-ventas` y dejar la sesión/carga en un estado estable, sin volver a gastar créditos en el mismo problema.
 
-## Qué está pasando realmente
+# Plan: arreglar espaciado/márgenes, modal de import y simplificar sesión
 
-El error que ves ahora no es “la ruta no existe” en el sentido de navegación. La ruta sí está registrada en `routeTree.gen.ts` y el archivo `src/routes/_app/analisis-ventas.tsx` existe.
+## 1) Espaciado consistente en `/analisis-ventas`
 
-El fallo actual es otro: el navegador intenta cargar el módulo lazy de esa ruta y el archivo dinámico no se está sirviendo correctamente (`Failed to fetch dynamically imported module`). Eso significa que quedó un problema en la capa de code-splitting/carga del chunk de esa vista, separado del problema anterior de sesión/hydration.
+El problema es que esta vista **no tiene contenedor con padding** (a diferencia de las demás páginas que sí usan `mx-auto max-w-... px-6 py-10 lg:px-10`). Por eso el contenido pega contra los bordes y se ve "mal de márgenes".
 
-En otras palabras:
-1. El problema de sesión/hydration y re-montado del árbol era real.
-2. Pero `/analisis-ventas` todavía tiene un problema propio de carga lazy del módulo.
+Cambios en `AnalisisVentasPage.tsx`:
+- Envolver todo en `<div className="mx-auto max-w-[1600px] px-6 py-10 lg:px-10 space-y-8">` — mismo patrón que `CostosProductosPage`.
+- Quitar la barra de progreso `sticky top-0` que choca con el header global (queda como barra normal arriba del bloque de filtros).
+- Ajustar `sticky top-2` de filtros a `sticky top-16` para que quede debajo del header (h-14 + margen).
 
-## Plan de corrección
+## 2) Normalizar `<main>` en `_app.tsx`
 
-### 1) Hacer `/analisis-ventas` manualmente lazy y dejar de depender del split automático de ese archivo
-Cambiar la arquitectura de esa ruta para que quede así:
+Añadir `min-w-0` al `<main>` para que el contenido pueda colapsar correctamente con el sidebar y no haya overflow horizontal raro en pantallas medianas. No tocar el padding (cada página lo controla — patrón actual del proyecto).
 
-- `src/routes/_app/analisis-ventas.tsx`:
-  - solo configuración crítica de la ruta (`createFileRoute`, `head`, y si hace falta `pendingComponent`)
-  - sin importar directamente `AnalisisVentasPage`
+## 3) Mejorar el modal `UploadVentasDialog`
 
-- `src/routes/_app/analisis-ventas.lazy.tsx`:
-  - `createLazyFileRoute("/_app/analisis-ventas")`
-  - ahí vive el `component`
-  - opcionalmente `errorComponent` específico con mensaje claro y botón de retry
+- Subir `DialogContent` de `max-w-xl` a `max-w-3xl` para que la tabla preview (6 columnas) y el dropzone respiren.
+- Añadir `max-h-[85vh] overflow-y-auto` al contenido scrolleable interno para que en pantallas pequeñas el modal no se desborde.
+- Mantener overlay actual (ya cubre la tabla con `bg-black/80`).
 
-Esto cambia por completo el asset/chunk que el navegador intenta cargar y elimina el patrón actual `?tsr-split=component` sobre el archivo principal de la ruta, que es justamente lo que está fallando.
+## 4) Revisar otros modales con tablas largas
+Pasar a `max-w-3xl` los Dialogs que muestran preview de Excel:
+- `CreateListDialog` y `ReplaceListDialog` (`listas-precios`)
+- `UploadDialog` de `costos-productos` (Excel de 18 columnas)
 
-### 2) Aislar el origen exacto del fallo del chunk
-Antes de volver a dejar la vista completa, rehacer la carga en dos pasos:
+## 5) Sesión simplificada — sin localStorage propio
 
-1. Confirmar que la ruta lazy abre con un componente mínimo (“Análisis de ventas” + contenedor simple).
-2. Reintroducir progresivamente:
-   - `PageHeader`
-   - filtros (`DateRangePicker`, `MonthSelect`)
-   - upload (`UploadVentasDialog`)
-   - tablas
-   - gráficos `recharts`
+**Consecuencia importante**: si quitamos `localStorage`, al recargar la pestaña **se pierde la sesión** y hay que volver a seleccionar el usuario en `/login`. La sesión solo existirá mientras la pestaña esté abierta y navegando.
 
-Así se identifica si el problema está en:
-- la ruta lazy en sí
-- un import del feature
-- `recharts`
-- `DateRangePicker` / `react-day-picker`
-- `UploadVentasDialog`
-- algún import indirecto
+Cambios:
+- `src/lib/session.ts`: cambiar de `localStorage` a una **variable en memoria del módulo** (más `sessionStorage` como respaldo opcional para sobrevivir recargas dentro de la misma pestaña, pero NO entre pestañas/navegadores).
+  - Opción A (más estricta, "nativo puro"): solo memoria. Recarga = re-login.
+  - Opción B (recomendada): `sessionStorage`. Sobrevive recargas, se borra al cerrar la pestaña, no se comparte entre pestañas. Es el estándar nativo del navegador para sesiones efímeras.
+- `AuthContext`, `_app.tsx`, `login.tsx` siguen usando los mismos helpers `readStoredSession/writeStoredSession/clearStoredSession` — solo cambia la implementación interna.
+- Cliente Supabase (`src/integrations/supabase/client.ts`): cambiar `storage: localStorage` → `storage: sessionStorage` para consistencia (esto aplica solo si en el futuro se usa Supabase Auth real; hoy no afecta porque la app no usa Supabase Auth, solo el `app_users` table).
 
-### 3) Blindar la sesión para que no vuelva a parecer “rota”
-Mantener el enfoque de `ssr: false` en `_app`, pero endurecer la validación:
+**Pregunta clave a resolver**: ¿quieres opción A (recarga = re-login, lo más nativo posible) u opción B (sessionStorage, sobrevive F5 pero se va al cerrar la pestaña)? Por defecto aplico **opción B** porque es el balance correcto entre "sin cache persistente" y "no obligar a re-login en cada F5".
 
-- en `beforeLoad` de `src/routes/_app.tsx`, no solo revisar si existe el string en localStorage, sino parsearlo y validar que tenga `id` y `name`
-- si el JSON está corrupto, limpiar la storage key y redirigir a `/login`
-- en `AppLayout`, no dejar `return null` como salida silenciosa si el storage está inválido; debe redirigir o recuperarse de forma explícita
+## 6) Limpieza de localStorage actual al cargar
 
-Esto evita estados fantasma donde:
-- `beforeLoad` cree que hay sesión
-- pero `AuthContext` no pueda hidratar el usuario
-- y el layout quede en blanco o inestable
-
-### 4) Unificar la lógica de sesión entre guard y contexto
-Ahora mismo hay dos lecturas separadas de localStorage:
-- una en `_app.tsx`
-- otra en `AuthContext.tsx`
-
-La corrección será:
-- extraer una sola función compartida de lectura/validación de sesión
-- usar exactamente esa misma función en el guard y en el contexto
-
-Así evitamos divergencias del tipo:
-- el guard acepta algo que el contexto rechaza
-- o el contexto cree que no hay usuario mientras la ruta ya dejó pasar
-
-### 5) Endurecer la navegación a `/login`
-Ajustar `src/routes/login.tsx` para que:
-- si ya hay usuario válido, redirija de forma temprana y consistente
-- no dependa solo de un `useEffect` posterior al render
-- use navegación de reemplazo cuando aplique, para evitar historiales raros y sensaciones de “rebote” o cache roto
-
-### 6) Dejar `/analisis-ventas` con fallback útil, no con caída global
-Agregar un `errorComponent` específico a esa ruta lazy para que, si vuelve a fallar algún import interno, no caiga toda la experiencia con el error global genérico.
-
-Ese fallback debe:
-- explicar que falló la carga del módulo de análisis
-- ofrecer “Reintentar”
-- ofrecer “Volver al dashboard”
-- mostrar detalle técnico solo en desarrollo
-
-### 7) Verificación final
-Después de aplicar la corrección, validar estos escenarios:
-
-1. Recarga dura en `/dashboard`
-2. Navegación sidebar → `/analisis-ventas`
-3. Recarga dura directa en `/analisis-ventas`
-4. Volver a otra vista y regresar
-5. Abrir `UploadVentasDialog`
-6. Cambiar rango y meses
-7. Confirmar que ya no aparece:
-   - `Failed to fetch dynamically imported module`
-   - pantalla vacía por sesión inválida
-   - flashes repetidos de carga por re-montado
+Para borrar el cache que el usuario ya tiene almacenado, añadir en `src/lib/session.ts` una migración one-shot: al cargar, si encuentra la key vieja en `localStorage`, la borra (y opcionalmente la mueve a `sessionStorage` para no forzar re-login esta vez).
 
 ## Archivos a tocar
 
-- `src/routes/_app.tsx`
-- `src/contexts/AuthContext.tsx`
-- `src/routes/login.tsx`
-- `src/routes/_app/analisis-ventas.tsx`
-- `src/routes/_app/analisis-ventas.lazy.tsx` (nuevo)
-- posiblemente `src/features/analisis-ventas/AnalisisVentasPage.tsx` si hay que aislar imports problemáticos
-- opcionalmente un helper compartido para leer la sesión almacenada
+1. `src/features/analisis-ventas/AnalisisVentasPage.tsx` — contenedor + sticky offsets
+2. `src/features/analisis-ventas/UploadVentasDialog.tsx` — `max-w-3xl` + overflow
+3. `src/features/listas-precios/ListasPreciosPage.tsx` — Dialogs a `max-w-3xl`
+4. `src/features/costos-productos/CostosProductosPage.tsx` — Dialog a `max-w-3xl`
+5. `src/routes/_app.tsx` — `<main className="flex-1 min-w-0">`
+6. `src/lib/session.ts` — cambio a `sessionStorage` + migración limpieza de `localStorage`
+7. `src/integrations/supabase/client.ts` — `storage: sessionStorage`
 
 ## Resultado esperado
 
-- sesión consistente y validada de forma única
-- sin estados raros de persistencia/caché
-- `/analisis-ventas` vuelve a existir y abrir correctamente
-- sin error de módulo dinámico
-- navegación más confiable entre vistas
-- si algo falla otra vez en esa vista, quedará contenido en un fallback local y no en una caída global
+- `/analisis-ventas` con márgenes y padding consistentes con el resto de vistas.
+- Modal de import más ancho, dropzone y preview con espacio adecuado.
+- Sesión usando `sessionStorage` (estándar nativo del navegador): se mantiene durante la navegación y recargas en la misma pestaña, se borra al cerrarla. Sin estados "fantasma" ni cache cruzado entre sesiones.
+- `localStorage` viejo se limpia automáticamente al primer load.
+
