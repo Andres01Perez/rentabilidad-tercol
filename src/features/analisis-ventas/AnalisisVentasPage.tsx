@@ -73,18 +73,18 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-gradient-to-br p-5 shadow-sm backdrop-blur",
+        "min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br p-5 shadow-sm backdrop-blur",
         toneClasses,
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       </div>
-      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      <p className="mt-2 truncate text-xl font-bold tracking-tight md:text-2xl">{value}</p>
+      {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
