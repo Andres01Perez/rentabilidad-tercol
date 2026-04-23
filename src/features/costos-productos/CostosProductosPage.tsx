@@ -235,23 +235,59 @@ export function CostosProductosPage() {
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
               <TableRow>
-                {COLUMNS.map((c) => (
-                  <TableHead key={c.key} className={c.numeric ? "text-right text-xs" : "text-xs"}>
-                    {c.label}
-                  </TableHead>
-                ))}
+                {SECTIONS.map((s, idx) => {
+                  if (s.kind === "cols") {
+                    return s.cols.map((c) => (
+                      <TableHead key={c.key} className={c.numeric ? "text-right text-xs" : "text-xs"}>
+                        {c.label}
+                      </TableHead>
+                    ));
+                  }
+                  if (!expanded[s.id]) {
+                    return (
+                      <TableHead key={`g-${s.id}-${idx}`} className="text-center text-xs">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(s.id)}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title={`Mostrar ${s.label}`}
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          {s.label}
+                        </button>
+                      </TableHead>
+                    );
+                  }
+                  return s.cols.map((c, ci) => (
+                    <TableHead key={c.key} className={c.numeric ? "text-right text-xs" : "text-xs"}>
+                      <span className="inline-flex items-center gap-1">
+                        {ci === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(s.id)}
+                            className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title={`Ocultar ${s.label}`}
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        )}
+                        {c.label}
+                      </span>
+                    </TableHead>
+                  ));
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={COLUMNS.length} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={visibleColCount} className="h-32 text-center text-muted-foreground">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={COLUMNS.length} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <p className="text-sm text-muted-foreground">
                         Sin datos para {formatMonth(month)}.
@@ -266,17 +302,29 @@ export function CostosProductosPage() {
               ) : (
                 filtered.map((r) => (
                   <TableRow key={r.id}>
-                    {COLUMNS.map((c) => {
-                      const v = r[c.key];
-                      return (
-                        <TableCell key={c.key} className={c.numeric ? "text-right text-xs tabular-nums" : "text-xs"}>
-                          {c.numeric
-                            ? typeof v === "number"
-                              ? formatNumber(v, { maximumFractionDigits: 2 })
-                              : "—"
-                            : (v as string | null) ?? "—"}
-                        </TableCell>
-                      );
+                    {SECTIONS.map((s, idx) => {
+                      if (s.kind === "group" && !expanded[s.id]) {
+                        return (
+                          <TableCell
+                            key={`g-${s.id}-${idx}`}
+                            className="text-center text-xs text-muted-foreground"
+                          >
+                            …
+                          </TableCell>
+                        );
+                      }
+                      return s.cols.map((c) => {
+                        const v = r[c.key];
+                        return (
+                          <TableCell key={c.key} className={c.numeric ? "text-right text-xs tabular-nums" : "text-xs"}>
+                            {c.numeric
+                              ? typeof v === "number"
+                                ? formatNumber(v, { maximumFractionDigits: 2 })
+                                : "—"
+                              : (v as string | null) ?? "—"}
+                          </TableCell>
+                        );
+                      });
                     })}
                   </TableRow>
                 ))
