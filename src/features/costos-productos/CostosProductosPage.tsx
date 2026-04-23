@@ -88,25 +88,55 @@ const WIZARD_FIELDS: WizardField<ColKey>[] = [
   { key: "pct_cto", label: "% Costo", suggestedAliases: ["%CTO", "% CTO", "PCT CTO"] },
 ];
 
-const COLUMNS: { key: keyof ProductCost; label: string; numeric?: boolean }[] = [
-  { key: "grupo", label: "GRUPO" },
-  { key: "referencia", label: "REF" },
-  { key: "descripcion", label: "DESCRIPCIÓN" },
-  { key: "cant", label: "CANT", numeric: true },
-  { key: "cumat", label: "CUMAT", numeric: true },
-  { key: "cumo", label: "CUMO", numeric: true },
-  { key: "cunago", label: "CUNAGO", numeric: true },
-  { key: "ctmat", label: "CTMAT", numeric: true },
-  { key: "ctmo", label: "CTMO", numeric: true },
-  { key: "ctsit", label: "CTSIT", numeric: true },
-  { key: "pct_part", label: "%PART", numeric: true },
-  { key: "cifu", label: "CIFU", numeric: true },
-  { key: "mou", label: "MOU", numeric: true },
-  { key: "ctu", label: "CTU", numeric: true },
-  { key: "ct", label: "CT", numeric: true },
-  { key: "puv", label: "PUV", numeric: true },
-  { key: "preciotot", label: "PRECIOTOT", numeric: true },
-  { key: "pct_cto", label: "%CTO", numeric: true },
+type ColDef = { key: keyof ProductCost; label: string; numeric?: boolean };
+type GroupId = "cu" | "ct";
+type Section =
+  | { kind: "cols"; cols: ColDef[] }
+  | { kind: "group"; id: GroupId; label: string; cols: ColDef[] };
+
+const SECTIONS: Section[] = [
+  {
+    kind: "cols",
+    cols: [
+      { key: "grupo", label: "GRUPO" },
+      { key: "referencia", label: "REF" },
+      { key: "descripcion", label: "DESCRIPCIÓN" },
+      { key: "cant", label: "CANT", numeric: true },
+    ],
+  },
+  {
+    kind: "group",
+    id: "cu",
+    label: "CU",
+    cols: [
+      { key: "cumat", label: "CUMAT", numeric: true },
+      { key: "cumo", label: "CUMO", numeric: true },
+      { key: "cunago", label: "CUNAGO", numeric: true },
+    ],
+  },
+  {
+    kind: "group",
+    id: "ct",
+    label: "CT desglose",
+    cols: [
+      { key: "ctmat", label: "CTMAT", numeric: true },
+      { key: "ctmo", label: "CTMO", numeric: true },
+      { key: "ctsit", label: "CTSIT", numeric: true },
+    ],
+  },
+  {
+    kind: "cols",
+    cols: [
+      { key: "pct_part", label: "%PART", numeric: true },
+      { key: "cifu", label: "CIFU", numeric: true },
+      { key: "mou", label: "MOU", numeric: true },
+      { key: "ctu", label: "CTU", numeric: true },
+      { key: "ct", label: "CT", numeric: true },
+      { key: "puv", label: "PUV", numeric: true },
+      { key: "preciotot", label: "PRECIOTOT", numeric: true },
+      { key: "pct_cto", label: "%CTO", numeric: true },
+    ],
+  },
 ];
 
 export function CostosProductosPage() {
