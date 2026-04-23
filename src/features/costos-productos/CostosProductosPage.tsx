@@ -8,14 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonthSelect } from "@/components/period/MonthSelect";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -33,8 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Dropzone } from "@/components/excel/Dropzone";
-import { parseExcel, chunkedInsert } from "@/lib/excel";
+import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
+import { chunkedInsert } from "@/lib/excel";
 import { currentMonthDate, formatMonth, formatNumber } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
@@ -60,32 +52,40 @@ type ProductCost = {
   pct_cto: number | null;
 };
 
-const COLUMN_MAP = {
-  grupo: ["GRUPO", "Grupo"],
-  referencia: ["REFERENCIA", "REF", "Referencia"],
-  descripcion: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción"],
-  cant: ["CANT", "CANTIDAD"],
-  cumat: ["CUMAT", "CU MAT"],
-  cumo: ["CUMO", "CU MO"],
-  cunago: ["CUNAGO", "CU NAGO"],
-  ctmat: ["CTMAT", "CT MAT"],
-  ctmo: ["CTMO", "CT MO"],
-  ctsit: ["CTSIT", "CT SIT"],
-  pct_part: ["%PART", "% PART", "PORCENTAJE PART", "PCT PART"],
-  cifu: ["CIFU"],
-  mou: ["MOU"],
-  ctu: ["CTU"],
-  ct: ["CT"],
-  puv: ["PUV"],
-  preciotot: ["PRECIOTOT", "PRECIO TOT", "PRECIO TOTAL"],
-  pct_cto: ["%CTO", "% CTO", "PCT CTO"],
-} as const;
+type ColKey =
+  | "grupo" | "referencia" | "descripcion" | "cant"
+  | "cumat" | "cumo" | "cunago" | "ctmat" | "ctmo" | "ctsit"
+  | "pct_part" | "cifu" | "mou" | "ctu" | "ct" | "puv" | "preciotot" | "pct_cto";
 
-type ColKey = keyof typeof COLUMN_MAP;
-
-const NUMERIC_KEYS: readonly ColKey[] = [
+const NUMERIC_KEYS: ColKey[] = [
   "cant", "cumat", "cumo", "cunago", "ctmat", "ctmo", "ctsit",
   "pct_part", "cifu", "mou", "ctu", "ct", "puv", "preciotot", "pct_cto",
+];
+
+const WIZARD_FIELDS: WizardField<ColKey>[] = [
+  { key: "referencia", label: "Referencia", required: true,
+    suggestedAliases: ["REFERENCIA", "REF", "Referencia", "CODIGO", "Código", "COD"] },
+  { key: "ctu", label: "CTU (Costo Total Unitario)", required: true,
+    suggestedAliases: ["CTU", "CT U", "COSTO TOTAL UNITARIO", "Costo total unitario", "COSTO UNITARIO"] },
+  { key: "grupo", label: "Grupo", suggestedAliases: ["GRUPO", "Grupo", "FAMILIA", "CATEGORIA", "Categoría"] },
+  { key: "descripcion", label: "Descripción",
+    suggestedAliases: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción", "NOMBRE", "PRODUCTO"] },
+  { key: "cant", label: "Cantidad", suggestedAliases: ["CANT", "CANTIDAD"] },
+  { key: "cumat", label: "CUMAT", suggestedAliases: ["CUMAT", "CU MAT"] },
+  { key: "cumo", label: "CUMO", suggestedAliases: ["CUMO", "CU MO"] },
+  { key: "cunago", label: "CUNAGO", suggestedAliases: ["CUNAGO", "CU NAGO"] },
+  { key: "ctmat", label: "CTMAT", suggestedAliases: ["CTMAT", "CT MAT"] },
+  { key: "ctmo", label: "CTMO", suggestedAliases: ["CTMO", "CT MO"] },
+  { key: "ctsit", label: "CTSIT", suggestedAliases: ["CTSIT", "CT SIT"] },
+  { key: "pct_part", label: "% Participación",
+    suggestedAliases: ["%PART", "% PART", "PORCENTAJE PART", "PCT PART"] },
+  { key: "cifu", label: "CIFU", suggestedAliases: ["CIFU"] },
+  { key: "mou", label: "MOU", suggestedAliases: ["MOU"] },
+  { key: "ct", label: "CT (Costo Total)", suggestedAliases: ["CT", "COSTO TOTAL"] },
+  { key: "puv", label: "PUV", suggestedAliases: ["PUV"] },
+  { key: "preciotot", label: "Precio Total",
+    suggestedAliases: ["PRECIOTOT", "PRECIO TOT", "PRECIO TOTAL"] },
+  { key: "pct_cto", label: "% Costo", suggestedAliases: ["%CTO", "% CTO", "PCT CTO"] },
 ];
 
 const COLUMNS: { key: keyof ProductCost; label: string; numeric?: boolean }[] = [
@@ -240,7 +240,7 @@ export function CostosProductosPage() {
       </div>
 
       {uploadOpen && user && (
-        <UploadDialog
+        <CostosUploadWizard
           defaultMonth={month}
           onClose={() => setUploadOpen(false)}
           onDone={(m) => {
@@ -256,7 +256,7 @@ export function CostosProductosPage() {
   );
 }
 
-function UploadDialog({
+function CostosUploadWizard({
   defaultMonth,
   onClose,
   onDone,
@@ -270,131 +270,114 @@ function UploadDialog({
   userName: string;
 }) {
   const [month, setMonth] = React.useState(defaultMonth);
-  const [file, setFile] = React.useState<File | null>(null);
-  const [parsing, setParsing] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
+  const [pendingRows, setPendingRows] = React.useState<
+    Record<ColKey, string | number | null>[] | null
+  >(null);
   const [confirm, setConfirm] = React.useState<{ existingCount: number } | null>(null);
-  const [preview, setPreview] = React.useState<{
-    rows: Record<ColKey, string | number | null>[];
-    warnings: string[];
-  } | null>(null);
+  const [overwriting, setOverwriting] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
-    }
-    setParsing(true);
-    parseExcel(file, COLUMN_MAP, {
-      requiredKeys: ["referencia"],
-      numericKeys: [...NUMERIC_KEYS],
-    })
-      .then((res) => setPreview({ rows: res.rows as Record<ColKey, string | number | null>[], warnings: res.warnings }))
-      .catch((e: Error) => {
-        toast.error(e.message);
-        setFile(null);
-      })
-      .finally(() => setParsing(false));
-  }, [file]);
-
-  const handleAttempt = async () => {
-    if (!preview) return;
-    const { count, error } = await supabase
-      .from("product_costs")
-      .select("id", { count: "exact", head: true })
-      .eq("period_month", month);
-    if (error) {
-      toast.error("No se pudo verificar el mes");
-      return;
-    }
-    if ((count ?? 0) > 0) {
-      setConfirm({ existingCount: count ?? 0 });
-    } else {
-      await doUpload();
-    }
-  };
-
-  const doUpload = async () => {
-    if (!preview) return;
-    setSubmitting(true);
-    try {
+  const insertRows = React.useCallback(
+    async (rowsToInsert: Record<ColKey, string | number | null>[]) => {
+      // Replace any existing rows for that month, then insert.
       await supabase.from("product_costs").delete().eq("period_month", month);
-      const items = preview.rows.map((r) => {
-        const base: Record<string, unknown> = {
-          period_month: month,
-          referencia: String(r.referencia),
-          created_by_id: userId,
-          created_by_name: userName,
-        };
-        for (const k of Object.keys(COLUMN_MAP) as ColKey[]) {
-          if (k === "referencia") continue;
-          base[k] = r[k];
-        }
-        return base;
-      });
+      const items = rowsToInsert
+        .filter((r) => r.referencia != null && String(r.referencia).trim() !== "")
+        .map((r) => {
+          const base: Record<string, unknown> = {
+            period_month: month,
+            referencia: String(r.referencia).trim(),
+            created_by_id: userId,
+            created_by_name: userName,
+          };
+          for (const k of NUMERIC_KEYS) {
+            base[k] = r[k] ?? null;
+          }
+          if (r.grupo != null) base.grupo = String(r.grupo).trim() || null;
+          if (r.descripcion != null) base.descripcion = String(r.descripcion).trim() || null;
+          return base;
+        });
       await chunkedInsert(items, 500, async (batch) => {
         const { error } = await supabase.from("product_costs").insert(batch as never);
         if (error) throw error;
       });
       toast.success(`${items.length} productos cargados para ${formatMonth(month)}`);
       onDone(month);
+    },
+    [month, userId, userName, onDone],
+  );
+
+  const handleConfirm = React.useCallback(
+    async (rows: Record<ColKey, string | number | null>[]) => {
+      const { count, error } = await supabase
+        .from("product_costs")
+        .select("id", { count: "exact", head: true })
+        .eq("period_month", month);
+      if (error) {
+        toast.error("No se pudo verificar el mes");
+        return false;
+      }
+      if ((count ?? 0) > 0) {
+        // Defer until user confirms overwrite.
+        setPendingRows(rows);
+        setConfirm({ existingCount: count ?? 0 });
+        return false;
+      }
+      try {
+        await insertRows(rows);
+        return true;
+      } catch (e) {
+        console.error(e);
+        toast.error("Error al subir el Excel");
+        return false;
+      }
+    },
+    [month, insertRows],
+  );
+
+  const handleOverwrite = async () => {
+    if (!pendingRows) return;
+    setOverwriting(true);
+    try {
+      await insertRows(pendingRows);
+      setConfirm(null);
+      setPendingRows(null);
     } catch (e) {
       console.error(e);
-      toast.error("Error al subir el Excel");
+      toast.error("Error al sobrescribir el mes");
     } finally {
-      setSubmitting(false);
-      setConfirm(null);
+      setOverwriting(false);
     }
   };
 
   return (
     <>
-      <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Subir costos del mes</DialogTitle>
-            <DialogDescription>
-              Selecciona el mes y el Excel con las 18 columnas (GRUPO, REF, DESCRIPCION, CANT, CUMAT… %CTO).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Mes
-              </label>
-              <MonthSelect value={month} onValueChange={setMonth} className="h-10 w-full" />
-            </div>
-            <Dropzone file={file} onFile={setFile} />
-            {parsing && (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Procesando Excel…
-              </p>
-            )}
-            {preview && (
-              <div className="rounded-xl border border-border/60 bg-white/60 p-3 backdrop-blur">
-                <p className="text-xs font-semibold">{preview.rows.length} filas detectadas</p>
-                {preview.warnings.map((w, i) => (
-                  <p key={i} className="text-xs text-muted-foreground">⚠ {w}</p>
-                ))}
-              </div>
-            )}
+      <ImportWizardDialog<ColKey>
+        open
+        onClose={onClose}
+        title="Subir costos del mes"
+        description="Elige hoja, fila de encabezados y mapea las columnas. Solo Referencia y CTU son obligatorios."
+        fields={WIZARD_FIELDS}
+        numericKeys={NUMERIC_KEYS}
+        submitLabel="Subir costos"
+        onConfirm={handleConfirm}
+        extraStep1={
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Mes
+            </label>
+            <MonthSelect value={month} onValueChange={setMonth} className="h-10 w-full" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleAttempt}
-              disabled={!preview || preview.rows.length === 0 || submitting}
-              className="bg-gradient-brand text-white"
-            >
-              {submitting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Subir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        }
+      />
+      <AlertDialog
+        open={!!confirm}
+        onOpenChange={(o) => {
+          if (!o && !overwriting) {
+            setConfirm(null);
+            setPendingRows(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Sobrescribir mes</AlertDialogTitle>
@@ -403,9 +386,9 @@ function UploadDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={doUpload} disabled={submitting}>
-              {submitting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            <AlertDialogCancel disabled={overwriting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleOverwrite} disabled={overwriting}>
+              {overwriting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               Sí, sobrescribir
             </AlertDialogAction>
           </AlertDialogFooter>
