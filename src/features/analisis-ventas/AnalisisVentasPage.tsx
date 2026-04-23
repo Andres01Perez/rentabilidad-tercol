@@ -359,18 +359,140 @@ export function AnalisisVentasPage() {
     refreshKey,
   });
 
+  const filteredCount = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const numFilters = {
+      cantidad: parseNumFilter(colFilters.cantidad),
+      precio_unitario: parseNumFilter(colFilters.precio_unitario),
+      ctu: parseNumFilter(colFilters.ctu),
+      margenU: parseNumFilter(colFilters.margenU),
+      margenPct: parseNumFilter(colFilters.margenPct),
+    };
+    let count = 0;
+    for (const r of analytics.filteredRows) {
+      if (q) {
+        const hit =
+          (r.referencia ?? "").toLowerCase().includes(q) ||
+          (r.tercero ?? "").toLowerCase().includes(q) ||
+          (r.vendedor ?? "").toLowerCase().includes(q);
+        if (!hit) continue;
+      }
+      if (!matchTextFilter(r.sale_date, colFilters.sale_date)) continue;
+      if (!matchTextFilter(r.vendedor, colFilters.vendedor)) continue;
+      if (!matchTextFilter(r.dependencia, colFilters.dependencia)) continue;
+      if (!matchTextFilter(r.tercero, colFilters.tercero)) continue;
+      if (!matchTextFilter(r.referencia, colFilters.referencia)) continue;
+      if (!matchNumFilter(Number(r.cantidad), numFilters.cantidad)) continue;
+      if (!matchNumFilter(r.precio_unitario, numFilters.precio_unitario)) continue;
+      if (!matchNumFilter(r.ctu, numFilters.ctu)) continue;
+      const margenU = (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+      if (!matchNumFilter(margenU, numFilters.margenU)) continue;
+      if (!matchNumFilter(r.margenPct, numFilters.margenPct)) continue;
+      count++;
+    }
+    return count;
+  }, [analytics.filteredRows, search, colFilters]);
+
   const detailRows = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    const arr = q
-      ? analytics.filteredRows.filter(
-          (r) =>
-            (r.referencia ?? "").toLowerCase().includes(q) ||
-            (r.tercero ?? "").toLowerCase().includes(q) ||
-            (r.vendedor ?? "").toLowerCase().includes(q),
-        )
-      : analytics.filteredRows;
-    return arr.slice(0, 500);
-  }, [analytics.filteredRows, search]);
+    const numFilters = {
+      cantidad: parseNumFilter(colFilters.cantidad),
+      precio_unitario: parseNumFilter(colFilters.precio_unitario),
+      ctu: parseNumFilter(colFilters.ctu),
+      margenU: parseNumFilter(colFilters.margenU),
+      margenPct: parseNumFilter(colFilters.margenPct),
+    };
+    const filtered = analytics.filteredRows.filter((r) => {
+      if (q) {
+        const hit =
+          (r.referencia ?? "").toLowerCase().includes(q) ||
+          (r.tercero ?? "").toLowerCase().includes(q) ||
+          (r.vendedor ?? "").toLowerCase().includes(q);
+        if (!hit) return false;
+      }
+      if (!matchTextFilter(r.sale_date, colFilters.sale_date)) return false;
+      if (!matchTextFilter(r.vendedor, colFilters.vendedor)) return false;
+      if (!matchTextFilter(r.dependencia, colFilters.dependencia)) return false;
+      if (!matchTextFilter(r.tercero, colFilters.tercero)) return false;
+      if (!matchTextFilter(r.referencia, colFilters.referencia)) return false;
+      if (!matchNumFilter(Number(r.cantidad), numFilters.cantidad)) return false;
+      if (!matchNumFilter(r.precio_unitario, numFilters.precio_unitario)) return false;
+      if (!matchNumFilter(r.ctu, numFilters.ctu)) return false;
+      const margenU = (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+      if (!matchNumFilter(margenU, numFilters.margenU)) return false;
+      if (!matchNumFilter(r.margenPct, numFilters.margenPct)) return false;
+      return true;
+    });
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    const getVal = (r: (typeof filtered)[number]): string | number | null => {
+      switch (sortKey) {
+        case "sale_date":
+          return r.sale_date;
+        case "vendedor":
+          return r.vendedor;
+        case "dependencia":
+          return r.dependencia;
+        case "tercero":
+          return r.tercero;
+        case "referencia":
+          return r.referencia;
+        case "cantidad":
+          return Number(r.cantidad);
+        case "precio_unitario":
+          return r.precio_unitario;
+        case "ctu":
+          return r.ctu;
+        case "margenU":
+          return (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+        case "margenPct":
+          return r.margenPct;
+      }
+    };
+    const sorted = [...filtered].sort((a, b) => {
+      const av = getVal(a);
+      const bv = getVal(b);
+      const aNull = av === null || av === undefined || av === "";
+      const bNull = bv === null || bv === undefined || bv === "";
+      if (aNull && bNull) return 0;
+      if (aNull) return 1; // nulos siempre al final
+      if (bNull) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return sorted.slice(0, 2000);
+  }, [analytics.filteredRows, search, colFilters, sortKey, sortDir]);
+
+  const hasAnyColFilter = React.useMemo(
+    () => Object.values(colFilters).some((v) => v.trim() !== ""),
+    [colFilters],
+  );
+  const hasAnyFilter = hasAnyColFilter || search.trim() !== "";
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const clearAllFilters = () => {
+    setColFilters({
+      sale_date: "",
+      vendedor: "",
+      dependencia: "",
+      tercero: "",
+      referencia: "",
+      cantidad: "",
+      precio_unitario: "",
+      ctu: "",
+      margenU: "",
+      margenPct: "",
+    });
+    setSearch("");
+  };
 
   const tooltipFormatter = (v: unknown) =>
     typeof v === "number" ? formatCurrency(v) : String(v ?? "");
