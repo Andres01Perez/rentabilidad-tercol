@@ -12,6 +12,17 @@ import {
   Cell,
 } from "recharts";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/period";
+
+const fmtCurrency = (v: unknown) =>
+  typeof v === "number" ? formatCurrency(v) : String(v ?? "");
+const fmtPct = (v: unknown) =>
+  typeof v === "number" ? formatPercent(v, 1) : String(v ?? "");
+const fmtCount = (v: unknown) =>
+  typeof v === "number" ? `${formatNumber(v)} productos` : String(v ?? "");
+const fmtScatter = (v: unknown, n: unknown) => {
+  if (typeof v !== "number") return String(v ?? "");
+  return n === "precio" ? formatCurrency(v) : formatPercent(v, 1);
+};
 import type { RentabilidadRow } from "./useCalculadora";
 
 interface ChartsProps {
@@ -81,7 +92,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis type="number" fontSize={10} tickFormatter={(v) => formatNumber(v / 1000) + "k"} />
               <YAxis type="category" dataKey="ref" fontSize={10} width={80} />
-              <RTooltip formatter={(v: number) => formatCurrency(v)} />
+              <RTooltip formatter={fmtCurrency} />
               <Bar dataKey="margen" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -97,7 +108,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis type="number" fontSize={10} tickFormatter={(v) => v.toFixed(0) + "%"} />
               <YAxis type="category" dataKey="ref" fontSize={10} width={80} />
-              <RTooltip formatter={(v: number) => formatPercent(v, 1)} />
+              <RTooltip formatter={fmtPct} />
               <Bar dataKey="pct" radius={[0, 4, 4, 0]}>
                 {worstByPct.map((d, i) => (
                   <Cell key={i} fill={d.pct < 0 ? "hsl(0 72% 51%)" : "hsl(28 95% 55%)"} />
@@ -117,7 +128,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="label" fontSize={11} />
               <YAxis fontSize={11} />
-              <RTooltip formatter={(v: number) => formatNumber(v) + " productos"} />
+              <RTooltip formatter={fmtCount} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                 {distribution.map((d, i) => (
                   <Cell key={i} fill={d.label === "<0%" ? "hsl(0 72% 51%)" : "hsl(var(--primary))"} />
@@ -150,9 +161,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
                 tickFormatter={(v) => v.toFixed(0) + "%"}
               />
               <RTooltip
-                formatter={(v: number, n: string) =>
-                  n === "precio" ? formatCurrency(v) : formatPercent(v, 1)
-                }
+                formatter={fmtScatter}
                 labelFormatter={() => ""}
                 cursor={{ strokeDasharray: "3 3" }}
               />
