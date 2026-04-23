@@ -47,6 +47,8 @@ interface Props<TKey extends string> {
   step1Valid?: boolean;
   /** Optional key to drop rows whose value is 0 (e.g., precio = 0). */
   zeroDropKey?: TKey;
+  /** Key whose text value is checked to drop "TOTAL"/"SUBTOTAL" rows. */
+  textFilterKey?: TKey;
 }
 
 type Step = "file" | "map" | "preview";
@@ -63,6 +65,7 @@ export function ImportWizardDialog<TKey extends string>({
   extraStep1,
   step1Valid = true,
   zeroDropKey,
+  textFilterKey,
 }: Props<TKey>) {
   const [step, setStep] = React.useState<Step>("file");
   const [file, setFile] = React.useState<File | null>(null);
@@ -141,6 +144,7 @@ export function ImportWizardDialog<TKey extends string>({
       requiredKeys: fields.filter((f) => f.required).map((f) => f.key),
       numericKeys,
       dropZeroForKey: dropZero ? zeroDropKey : undefined,
+      textFilterKey,
     })
       .then((res) => setPreview(res))
       .catch((e: Error) => {
@@ -148,7 +152,7 @@ export function ImportWizardDialog<TKey extends string>({
         setStep("map");
       })
       .finally(() => setParsing(false));
-  }, [step, file, picker, mapping, fields, numericKeys, dropZero, zeroDropKey]);
+  }, [step, file, picker, mapping, fields, numericKeys, dropZero, zeroDropKey, textFilterKey]);
 
   const currentSheet = sheets && picker ? sheets.find((s) => s.name === picker.sheet) : null;
   const headersForMapper = React.useMemo(() => {
