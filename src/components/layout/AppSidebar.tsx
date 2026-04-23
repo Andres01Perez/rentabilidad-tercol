@@ -33,6 +33,7 @@ type NavItem = {
   title: string;
   to: string;
   icon: React.ComponentType<{ className?: string }>;
+  featured?: boolean;
 };
 
 const operacion: NavItem[] = [
@@ -43,8 +44,8 @@ const operacion: NavItem[] = [
 ];
 
 const analisis: NavItem[] = [
-  { title: "Calculadora", to: "/calculadora", icon: Calculator },
   { title: "Negocios fijos", to: "/negocios-fijos", icon: Briefcase },
+  { title: "Calculadora", to: "/calculadora", icon: Calculator, featured: true },
   { title: "Análisis de ventas", to: "/analisis-ventas", icon: TrendingUp },
   { title: "Historial", to: "/historial", icon: History },
 ];
@@ -75,6 +76,25 @@ const NavGroup = React.memo(function NavGroup({
         <SidebarMenu>
           {items.map((item) => {
             const isActive = currentPath === item.to || currentPath.startsWith(item.to + "/");
+            if (item.featured) {
+              return (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                    <Link
+                      to={item.to}
+                      className={cn(
+                        "relative flex items-center gap-3 rounded-lg font-semibold text-white transition-all",
+                        "bg-gradient-brand shadow-elegant hover:brightness-110",
+                      )}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0 text-white" />
+                      <span className="flex-1">{item.title}</span>
+                      {!collapsed && <Sparkles className="h-3.5 w-3.5 text-white/90" />}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            }
             return (
               <SidebarMenuItem key={item.to}>
                 <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
