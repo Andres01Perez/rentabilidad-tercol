@@ -42,6 +42,7 @@ type EditorItem = {
   descripcion: string | null;
   cantidad: string;
   precio_unitario: string;
+  descuento_pct: string;
   source_price_list_id: string | null;
 };
 
@@ -103,7 +104,9 @@ export function NegotiationEditor({
     setLoadingItems(true);
     void supabase
       .from("negotiation_items")
-      .select("id, referencia, descripcion, cantidad, precio_unitario, source_price_list_id")
+      .select(
+        "id, referencia, descripcion, cantidad, precio_unitario, descuento_pct, source_price_list_id",
+      )
       .eq("negotiation_id", negotiation.id)
       .order("created_at", { ascending: true })
       .then(({ data, error }) => {
@@ -113,12 +116,21 @@ export function NegotiationEditor({
           return;
         }
         setItems(
-          (data ?? []).map((r) => ({
+          (data ?? []).map((r: {
+            id: string;
+            referencia: string;
+            descripcion: string | null;
+            cantidad: number;
+            precio_unitario: number;
+            descuento_pct: number | null;
+            source_price_list_id: string | null;
+          }) => ({
             uid: r.id,
             referencia: r.referencia,
             descripcion: r.descripcion,
             cantidad: String(r.cantidad),
             precio_unitario: String(r.precio_unitario),
+            descuento_pct: String(r.descuento_pct ?? 0),
             source_price_list_id: r.source_price_list_id,
           })),
         );
@@ -156,6 +168,7 @@ export function NegotiationEditor({
         descripcion: ref.descripcion,
         cantidad: "1",
         precio_unitario: suggested != null ? String(suggested) : "",
+        descuento_pct: "0",
         source_price_list_id: suggested != null ? sourceListId : null,
       },
     ]);
@@ -172,12 +185,13 @@ export function NegotiationEditor({
   };
 
   const validation = React.useMemo(() => {
-    const errors: Record<string, { qty?: boolean; price?: boolean }> = {};
+    const errors: Record<string, { qty?: boolean; price?: boolean; disc?: boolean }> = {};
     let hasInvalid = false;
     items.forEach((it) => {
       const qty = parseNum(it.cantidad);
       const price = parseNum(it.precio_unitario);
-      const e: { qty?: boolean; price?: boolean } = {};
+      const disc = parseNum(it.descuento_pct);
+      const e: { qty?: boolean; price?: boolean; disc?: boolean } = {};
       if (qty == null || qty <= 0) {
         e.qty = true;
         hasInvalid = true;
@@ -186,7 +200,11 @@ export function NegotiationEditor({
         e.price = true;
         hasInvalid = true;
       }
-      if (e.qty || e.price) errors[it.uid] = e;
+      if (disc == null || disc < 0 || disc > 100) {
+        e.disc = true;
+        hasInvalid = true;
+      }
+      if (e.qty || e.price || e.disc) errors[it.uid] = e;
     });
     const nameOk = name.trim().length > 0;
     const itemsOk = items.length > 0;
@@ -197,7 +215,9 @@ export function NegotiationEditor({
     return items.reduce((acc, it) => {
       const qty = parseNum(it.cantidad) ?? 0;
       const price = parseNum(it.precio_unitario) ?? 0;
-      return acc + qty * price;
+      const disc = parseNum(it.descuento_pct) ?? 0;
+      const sale = price * (1 - disc / 100);
+      return acc + qty * sale;
     }, 0);
   }, [items]);
 
@@ -213,12 +233,16 @@ export function NegotiationEditor({
       const itemRows = items.map((it) => {
         const qty = parseNum(it.cantidad)!;
         const price = parseNum(it.precio_unitario)!;
+        const disc = parseNum(it.descuento_pct) ?? 0;
+        const sale = price * (1 - disc / 100);
         return {
           referencia: it.referencia,
           descripcion: it.descripcion,
           cantidad: qty,
           precio_unitario: price,
-          subtotal: qty * price,
+          descuento_pct: disc,
+          precio_venta: sale,
+          subtotal: qty * sale,
           source_price_list_id: it.source_price_list_id,
         };
       });
@@ -386,13 +410,10 @@ export function NegotiationEditor({
                         <button
                           key={r.referencia}
                           onClick={() => void addReference(r)}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                          className="flex w-full items-center px-3 py-2 text-left hover:bg-accent"
                         >
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="font-sans text-sm font-bold text-foreground">
                             {r.referencia}
-                          </span>
-                          <span className="flex-1 truncate text-xs">
-                            {r.descripcion ?? "—"}
                           </span>
                         </button>
                       ))
@@ -417,11 +438,13 @@ export function NegotiationEditor({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[18%]">Ref</TableHead>
+                    <TableHead className="w-[14%]">Ref</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead className="w-[100px] text-right">Cantidad</TableHead>
-                    <TableHead className="w-[130px] text-right">Precio unit.</TableHead>
-                    <TableHead className="w-[120px] text-right">Subtotal</TableHead>
+                    <TableHead className="w-[80px] text-right">Cantidad</TableHead>
+                    <TableHead className="w-[110px] text-right">Precio unit.</TableHead>
+                    <TableHead className="w-[80px] text-right">Desc %</TableHead>
+                    <TableHead className="w-[110px] text-right">Precio venta</TableHead>
+                    <TableHead className="w-[110px] text-right">Subtotal</TableHead>
                     <TableHead className="w-[1%]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -430,9 +453,11 @@ export function NegotiationEditor({
                     const err = validation.errors[it.uid];
                     const qty = parseNum(it.cantidad) ?? 0;
                     const price = parseNum(it.precio_unitario) ?? 0;
+                    const disc = parseNum(it.descuento_pct) ?? 0;
+                    const sale = price * (1 - disc / 100);
                     return (
                       <TableRow key={it.uid}>
-                        <TableCell className="font-mono text-xs">{it.referencia}</TableCell>
+                        <TableCell className="text-sm font-bold">{it.referencia}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {it.descripcion ?? "—"}
                         </TableCell>
@@ -464,8 +489,27 @@ export function NegotiationEditor({
                             )}
                           />
                         </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={100}
+                            value={it.descuento_pct}
+                            onChange={(e) =>
+                              updateItem(it.uid, { descuento_pct: e.target.value })
+                            }
+                            className={cn(
+                              "h-8 text-right tabular-nums",
+                              err?.disc && "border-destructive focus-visible:ring-destructive",
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+                          {formatCurrency(sale)}
+                        </TableCell>
                         <TableCell className="text-right text-xs tabular-nums font-medium">
-                          {formatCurrency(qty * price)}
+                          {formatCurrency(qty * sale)}
                         </TableCell>
                         <TableCell>
                           <Button
