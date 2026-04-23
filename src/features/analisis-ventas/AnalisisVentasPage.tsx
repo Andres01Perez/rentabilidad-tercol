@@ -663,37 +663,59 @@ export function AnalisisVentasPage() {
 
           {/* Tabla detalle */}
           <div className="glass rounded-2xl border border-border/60 p-5">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">Detalle de ventas</h3>
                 <p className="text-xs text-muted-foreground">
                   Mostrando {formatNumber(detailRows.length)} de {formatNumber(analytics.filteredRows.length)} líneas
+                  {hasAnyColFilter && (
+                    <span> · filtradas: {formatNumber(filteredCount)}</span>
+                  )}
                 </p>
               </div>
-              <div className="relative w-72">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar referencia, tercero o vendedor…"
-                  className="h-9 pl-8"
-                />
+              <div className="flex items-center gap-2">
+                {hasAnyFilter && (
+                  <Button variant="outline" size="sm" onClick={clearAllFilters} className="gap-1.5">
+                    <X className="h-3.5 w-3.5" /> Limpiar filtros
+                  </Button>
+                )}
+                <div className="relative w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar referencia, tercero o vendedor…"
+                    className="h-9 pl-8"
+                  />
+                </div>
               </div>
             </div>
-            <div className="mt-4 max-h-[500px] overflow-auto rounded-xl border border-border/40">
+            <div className="mt-4 max-h-[calc(100vh-200px)] min-h-[600px] overflow-auto rounded-xl border border-border/40">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
                   <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead>Dependencia</TableHead>
-                    <TableHead>Tercero</TableHead>
-                    <TableHead>Ref</TableHead>
-                    <TableHead className="text-right">Cant</TableHead>
-                    <TableHead className="text-right">PUV</TableHead>
-                    <TableHead className="text-right">CTU</TableHead>
-                    <TableHead className="text-right">Margen U.</TableHead>
-                    <TableHead className="text-right">Margen %</TableHead>
+                    <SortableHead label="Fecha" sortKey="sale_date" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHead label="Vendedor" sortKey="vendedor" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHead label="Dependencia" sortKey="dependencia" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHead label="Tercero" sortKey="tercero" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHead label="Ref" sortKey="referencia" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHead label="Cant" sortKey="cantidad" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHead label="PUV" sortKey="precio_unitario" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHead label="CTU" sortKey="ctu" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHead label="Margen U." sortKey="margenU" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHead label="Margen %" sortKey="margenPct" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                  </TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <FilterCell value={colFilters.sale_date} onChange={(v) => setColFilters((p) => ({ ...p, sale_date: v }))} placeholder="2024-03" />
+                    <FilterCell value={colFilters.vendedor} onChange={(v) => setColFilters((p) => ({ ...p, vendedor: v }))} />
+                    <FilterCell value={colFilters.dependencia} onChange={(v) => setColFilters((p) => ({ ...p, dependencia: v }))} />
+                    <FilterCell value={colFilters.tercero} onChange={(v) => setColFilters((p) => ({ ...p, tercero: v }))} />
+                    <FilterCell value={colFilters.referencia} onChange={(v) => setColFilters((p) => ({ ...p, referencia: v }))} />
+                    <FilterCell value={colFilters.cantidad} onChange={(v) => setColFilters((p) => ({ ...p, cantidad: v }))} numeric />
+                    <FilterCell value={colFilters.precio_unitario} onChange={(v) => setColFilters((p) => ({ ...p, precio_unitario: v }))} numeric />
+                    <FilterCell value={colFilters.ctu} onChange={(v) => setColFilters((p) => ({ ...p, ctu: v }))} numeric />
+                    <FilterCell value={colFilters.margenU} onChange={(v) => setColFilters((p) => ({ ...p, margenU: v }))} numeric />
+                    <FilterCell value={colFilters.margenPct} onChange={(v) => setColFilters((p) => ({ ...p, margenPct: v }))} numeric />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
