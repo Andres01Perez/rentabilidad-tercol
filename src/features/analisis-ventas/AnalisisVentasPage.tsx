@@ -19,17 +19,9 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as RTooltip,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+  NativeBarList,
+  NativeLineChart,
+} from "@/components/charts/NativeMiniCharts";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -559,8 +551,26 @@ export function AnalisisVentasPage() {
     setSearch("");
   };
 
-  const tooltipFormatter = (v: unknown) =>
-    typeof v === "number" ? formatCurrency(v) : String(v ?? "");
+  const monthlyChartData = React.useMemo(
+    () =>
+      analytics.monthlySeries.map((item) => ({
+        label: item.label,
+        values: {
+          ventas: item.ventas,
+          costo: item.costo,
+          margen: item.margen,
+        },
+      })),
+    [analytics.monthlySeries],
+  );
+
+  const dailyChartData = React.useMemo(
+    () =>
+      analytics.dailySeries
+        .slice(-18)
+        .map((item) => ({ label: item.label, value: item.ventas, tone: "primary" as const })),
+    [analytics.dailySeries],
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
@@ -687,33 +697,23 @@ export function AnalisisVentasPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="glass rounded-2xl border border-border/60 p-5">
               <h3 className="text-sm font-semibold">Ventas, costo y margen por mes</h3>
-              <div className="mt-4 h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.monthlySeries}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="label" fontSize={11} />
-                    <YAxis fontSize={11} tickFormatter={(v) => formatNumber(v / 1000) + "k"} />
-                    <RTooltip formatter={tooltipFormatter} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line type="monotone" dataKey="ventas" name="Ventas" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="costo" name="Costo" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="margen" name="Margen" stroke="hsl(142 76% 36%)" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <p className="mt-1 text-xs text-muted-foreground">Comparativo mensual sin dependencias externas</p>
+              <div className="mt-4">
+                <NativeLineChart
+                  data={monthlyChartData}
+                  series={[
+                    { key: "ventas", label: "Ventas", colorVar: "--primary" },
+                    { key: "costo", label: "Costo", colorVar: "--muted-foreground" },
+                    { key: "margen", label: "Margen", colorVar: "--chart-3" },
+                  ]}
+                />
               </div>
             </div>
             <div className="glass rounded-2xl border border-border/60 p-5">
               <h3 className="text-sm font-semibold">Ventas por día</h3>
-              <div className="mt-4 h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.dailySeries}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="label" fontSize={10} interval="preserveStartEnd" />
-                    <YAxis fontSize={11} tickFormatter={(v) => formatNumber(v / 1000) + "k"} />
-                    <RTooltip formatter={tooltipFormatter} />
-                    <Bar dataKey="ventas" name="Ventas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <p className="mt-1 text-xs text-muted-foreground">Últimos 18 días con actividad en el período filtrado</p>
+              <div className="mt-4">
+                <NativeBarList data={dailyChartData} formatter={formatCurrency} />
               </div>
             </div>
           </div>
