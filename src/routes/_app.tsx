@@ -25,7 +25,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/costos-productos": "Costos",
   "/costos-operacionales": "Costos operacionales",
   "/calculadora": "Calculadora",
-  "/negocios-fijos": "Negocios fijos",
+  "/negociaciones": "Negociaciones",
   "/analisis-ventas": "Análisis de ventas",
   "/historial": "Historial",
   "/configuraciones": "Configuraciones",

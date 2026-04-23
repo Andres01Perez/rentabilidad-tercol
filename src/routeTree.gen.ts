@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppNegociosFijosRouteImport } from './routes/_app/negocios-fijos'
+import { Route as AppNegociacionesRouteImport } from './routes/_app/negociaciones'
 import { Route as AppListasPreciosRouteImport } from './routes/_app/listas-precios'
 import { Route as AppHistorialRouteImport } from './routes/_app/historial'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
@@ -36,9 +36,9 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppNegociosFijosRoute = AppNegociosFijosRouteImport.update({
-  id: '/negocios-fijos',
-  path: '/negocios-fijos',
+const AppNegociacionesRoute = AppNegociacionesRouteImport.update({
+  id: '/negociaciones',
+  path: '/negociaciones',
   getParentRoute: () => AppRoute,
 } as any)
 const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
@@ -95,7 +95,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/historial': typeof AppHistorialRoute
   '/listas-precios': typeof AppListasPreciosRoute
-  '/negocios-fijos': typeof AppNegociosFijosRoute
+  '/negociaciones': typeof AppNegociacionesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -107,7 +107,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/historial': typeof AppHistorialRoute
   '/listas-precios': typeof AppListasPreciosRoute
-  '/negocios-fijos': typeof AppNegociosFijosRoute
+  '/negociaciones': typeof AppNegociacionesRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -122,7 +122,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/historial': typeof AppHistorialRoute
   '/_app/listas-precios': typeof AppListasPreciosRoute
-  '/_app/negocios-fijos': typeof AppNegociosFijosRoute
+  '/_app/negociaciones': typeof AppNegociacionesRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -138,7 +138,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/historial'
     | '/listas-precios'
-    | '/negocios-fijos'
+    | '/negociaciones'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -150,7 +150,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/historial'
     | '/listas-precios'
-    | '/negocios-fijos'
+    | '/negociaciones'
     | '/'
   id:
     | '__root__'
@@ -164,7 +164,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/historial'
     | '/_app/listas-precios'
-    | '/_app/negocios-fijos'
+    | '/_app/negociaciones'
     | '/_app/'
   fileRoutesById: FileRoutesById
 }
@@ -196,11 +196,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/negocios-fijos': {
-      id: '/_app/negocios-fijos'
-      path: '/negocios-fijos'
-      fullPath: '/negocios-fijos'
-      preLoaderRoute: typeof AppNegociosFijosRouteImport
+    '/_app/negociaciones': {
+      id: '/_app/negociaciones'
+      path: '/negociaciones'
+      fullPath: '/negociaciones'
+      preLoaderRoute: typeof AppNegociacionesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/listas-precios': {
@@ -271,7 +271,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppHistorialRoute: typeof AppHistorialRoute
   AppListasPreciosRoute: typeof AppListasPreciosRoute
-  AppNegociosFijosRoute: typeof AppNegociosFijosRoute
+  AppNegociacionesRoute: typeof AppNegociacionesRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -284,7 +284,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppHistorialRoute: AppHistorialRoute,
   AppListasPreciosRoute: AppListasPreciosRoute,
-  AppNegociosFijosRoute: AppNegociosFijosRoute,
+  AppNegociacionesRoute: AppNegociacionesRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
