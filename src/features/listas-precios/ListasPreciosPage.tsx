@@ -263,35 +263,12 @@ function CreateListDialog({
   userName: string;
 }) {
   const [name, setName] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
-  const [parsing, setParsing] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [preview, setPreview] = React.useState<{
-    rows: Record<ColKey, string | number | null>[];
-    warnings: string[];
-  } | null>(null);
 
-  React.useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
+  const handleConfirm = async (rows: Record<ColKey, string | number | null>[]) => {
+    if (!name.trim() || rows.length === 0) {
+      toast.error("Asigna un nombre a la lista");
+      return false;
     }
-    setParsing(true);
-    parseExcel(file, COLUMN_MAP, {
-      requiredKeys: ["referencia"],
-      numericKeys: ["precio"],
-    })
-      .then((res) => setPreview({ rows: res.rows as Record<ColKey, string | number | null>[], warnings: res.warnings }))
-      .catch((e: Error) => {
-        toast.error(e.message);
-        setFile(null);
-      })
-      .finally(() => setParsing(false));
-  }, [file]);
-
-  const handleSubmit = async () => {
-    if (!name.trim() || !preview || preview.rows.length === 0) return;
-    setSubmitting(true);
     try {
       const { data: list, error: listErr } = await supabase
         .from("price_lists")
@@ -299,7 +276,7 @@ function CreateListDialog({
         .select("id")
         .single();
       if (listErr || !list) throw listErr ?? new Error("No se pudo crear la lista");
-      const items = preview.rows.map((r) => ({
+      const items = rows.map((r) => ({
         price_list_id: list.id,
         referencia: String(r.referencia),
         descripcion: r.descripcion ? String(r.descripcion) : null,
@@ -312,58 +289,40 @@ function CreateListDialog({
       });
       toast.success(`Lista "${name.trim()}" creada con ${items.length} items`);
       onCreated();
+      return true;
     } catch (e) {
       console.error(e);
       toast.error("Error al crear la lista");
-    } finally {
-      setSubmitting(false);
+      return false;
     }
   };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nueva lista de precios</DialogTitle>
-          <DialogDescription>
-            Asigna un nombre y sube el Excel con las columnas REFERENCIA, DESCRIPCIÓN, UNIDAD DE EMPAQUE, LISTA DE PRECIOS.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Nombre de la lista
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Mayoristas Q2 2026"
-              autoFocus
-            />
-          </div>
-          <Dropzone file={file} onFile={setFile} />
-          {parsing && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Procesando Excel…
-            </p>
-          )}
-          {preview && <PreviewTable preview={preview} />}
+    <ImportWizardDialog<ColKey>
+      open
+      onClose={onClose}
+      title="Nueva lista de precios"
+      description="Sube el Excel y mapea las columnas a Referencia, Descripción, Unidad de empaque y Precio."
+      fields={WIZARD_FIELDS}
+      numericKeys={["precio"]}
+      zeroDropKey="precio"
+      submitLabel="Crear lista"
+      step1Valid={name.trim().length > 0}
+      onConfirm={handleConfirm}
+      extraStep1={
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Nombre de la lista
+          </label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej. Mayoristas Q2 2026"
+            autoFocus
+          />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!name.trim() || !preview || preview.rows.length === 0 || submitting}
-            className="bg-gradient-brand text-white"
-          >
-            {submitting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-            Crear lista
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      }
+    />
   );
 }
 
