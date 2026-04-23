@@ -305,7 +305,7 @@ export function NegotiationEditor({
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
         <SheetHeader>
           <SheetTitle>{isEdit ? "Editar negociación" : "Nueva negociación"}</SheetTitle>
           <SheetDescription>
@@ -438,13 +438,13 @@ export function NegotiationEditor({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[14%]">Ref</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead className="w-[80px] text-right">Cantidad</TableHead>
-                    <TableHead className="w-[110px] text-right">Precio unit.</TableHead>
-                    <TableHead className="w-[80px] text-right">Desc %</TableHead>
-                    <TableHead className="w-[110px] text-right">Precio venta</TableHead>
-                    <TableHead className="w-[110px] text-right">Subtotal</TableHead>
+                    <TableHead className="w-[110px]">Ref</TableHead>
+                    <TableHead className="min-w-[140px]">Descripción</TableHead>
+                    <TableHead className="w-[110px] text-right">Cantidad</TableHead>
+                    <TableHead className="w-[130px] text-right">Precio unit.</TableHead>
+                    <TableHead className="w-[90px] text-right">Desc %</TableHead>
+                    <TableHead className="w-[120px] text-right">Precio venta</TableHead>
+                    <TableHead className="w-[130px] text-right">Subtotal</TableHead>
                     <TableHead className="w-[1%]"></TableHead>
                   </TableRow>
                 </TableHeader>
