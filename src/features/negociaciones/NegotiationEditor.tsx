@@ -305,7 +305,7 @@ export function NegotiationEditor({
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
         <SheetHeader>
           <SheetTitle>{isEdit ? "Editar negociación" : "Nueva negociación"}</SheetTitle>
           <SheetDescription>
