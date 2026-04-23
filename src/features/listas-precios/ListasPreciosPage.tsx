@@ -7,14 +7,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -39,8 +31,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dropzone } from "@/components/excel/Dropzone";
-import { parseExcel, chunkedInsert } from "@/lib/excel";
+import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
+import { chunkedInsert } from "@/lib/excel";
 import { formatCurrency } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
@@ -62,14 +54,32 @@ type PriceItem = {
   precio: number | null;
 };
 
-const COLUMN_MAP = {
-  referencia: ["REFERENCIA", "REF", "Referencia"],
-  descripcion: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción", "Descripcion"],
-  unidad_empaque: ["UNIDAD DE EMPAQUE", "UNIDAD EMPAQUE", "Unidad de empaque", "UND"],
-  precio: ["LISTA DE PRECIOS", "PRECIO", "Precio", "Lista de precios"],
-} as const;
+type ColKey = "referencia" | "descripcion" | "unidad_empaque" | "precio";
 
-type ColKey = keyof typeof COLUMN_MAP;
+const WIZARD_FIELDS: WizardField<ColKey>[] = [
+  {
+    key: "referencia",
+    label: "Referencia",
+    required: true,
+    suggestedAliases: ["REFERENCIA", "REF", "Referencia", "Codigo", "Código", "CODIGO"],
+  },
+  {
+    key: "descripcion",
+    label: "Descripción",
+    suggestedAliases: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción", "Descripcion", "Nombre", "Producto"],
+  },
+  {
+    key: "unidad_empaque",
+    label: "Unidad de empaque",
+    suggestedAliases: ["UNIDAD DE EMPAQUE", "UNIDAD EMPAQUE", "Unidad de empaque", "UND", "UNIDAD", "Unidad"],
+  },
+  {
+    key: "precio",
+    label: "Precio",
+    required: true,
+    suggestedAliases: ["LISTA DE PRECIOS", "PRECIO", "Precio", "Lista de precios", "Valor", "VALOR"],
+  },
+];
 
 export function ListasPreciosPage() {
   const { user } = useAuth();
