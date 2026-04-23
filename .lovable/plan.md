@@ -1,63 +1,74 @@
 
 
-# Plan: filtrar filas "TOTAL" + respuesta sobre la maestra de referencias
+# Plan: agrupar columnas colapsables en la tabla de costos
 
-## Sobre tu sugerencia de la maestra de referencias
+## Cambio
 
-**Mi recomendación: no la construyamos todavía.** Te explico por qué y qué hago en su lugar.
+Agrupar dos bloques de columnas en la tabla de `/costos-productos` con un control `+ / −` en el encabezado para expandir/colapsar. Por defecto, ambos grupos quedan **colapsados** para que la tabla quepa cómoda.
 
-### Por qué NO crear la maestra ahora
+### Grupos
 
-1. **Resuelve un problema que no tienes.** El problema real son filas basura ("TOTAL", "SUBTOTAL", "TOTAL GENERAL") que se cuelan en el import. Eso se arregla con un filtro al parsear, no con una tabla nueva.
-2. **Te genera fricción operativa.** Si la maestra es obligatoria, cada vez que aparezca una referencia nueva en ventas/costos/precios tendrías que ir primero a registrarla manualmente. Atrasa todo.
-3. **Las referencias se van a "auto-construir" solas.** Si las 3 fuentes (ventas, costos, listas) usan los mismos códigos del ERP, ya están sincronizadas por convención. La maestra solo añade burocracia.
-4. **Lo que tú quieres (relacionar referencias entre tablas) ya funciona** sin maestra: un `JOIN` por `referencia` entre `sales`, `product_costs` y `price_list_items` ya te da rentabilidad por producto.
+- **Costos unitarios (CU)** → `CUMAT`, `CUMO`, `CUNAGO`
+- **Costos totales (CT desglose)** → `CTMAT`, `CTMO`, `CTSIT`
 
-### Cuándo SÍ tendría sentido la maestra
+### Siempre visibles
 
-Más adelante, como **vista de reconciliación** (no como gate de importación):
-- "Referencias en ventas que no tienen costo cargado este mes"
-- "Referencias en costos que nunca se han vendido"
-- "Productos descontinuados"
+`GRUPO`, `REF`, `DESCRIPCIÓN`, `CANT`, `%PART`, `CIFU`, `MOU`, `CTU`, `CT`, `PUV`, `PRECIOTOT`, `%CTO`.
 
-Eso lo podemos hacer en su momento como una **vista derivada** (`SELECT DISTINCT referencia FROM ...`) sin tocar el flujo de import.
+## UX
 
-**Decisión:** seguimos sin maestra. Atacamos el problema real ahora.
+- En la fila de encabezados, donde antes estaban las 3 columnas del grupo, aparece **una sola celda** con el nombre del grupo (`CU` / `CT desglose`) y un botón pequeño con `+` (colapsado) o `−` (expandido).
+- Al hacer clic en `+`, esa celda se reemplaza por las 3 columnas del grupo y aparece un `−` en la última de ellas (o en una celda compacta al inicio del grupo) para volver a colapsar.
+- Las celdas del cuerpo respetan el estado: cuando el grupo está colapsado, en su lugar se muestra una celda con `…` muteada (sin valores numéricos) para mantener la tabla alineada y dar pista visual de que hay datos ocultos.
+- Estado se guarda en `React.useState` local (no persiste). Sin animaciones complejas — solo cambio inmediato del layout.
 
-## Qué voy a implementar
+```text
+Colapsado:
+| GRUPO | REF | DESC | CANT | [+ CU] | [+ CT desglose] | %PART | CIFU | ... |
+|       |     |      |  10  |   …    |       …         |   …   |  …   |     |
 
-### Filtrar filas "TOTAL" en el parser genérico
+Expandido CU:
+| GRUPO | REF | DESC | CANT | CUMAT | CUMO | CUNAGO [−] | [+ CT desglose] | %PART | ... |
+```
 
-Añadir lógica en `parseExcelWithMapping` (`src/lib/excel.ts`) que descarte filas cuando el valor de la **columna mapeada como `referencia`** (o cualquier campo de texto requerido) cumple alguno de estos patrones:
+## Implementación técnica
 
-- Es exactamente o empieza con: `total`, `subtotal`, `total general`, `gran total`, `suma`, `totales` (case-insensitive, sin acentos).
-- Contiene solo dígitos cero, guiones o espacios.
-- Tiene longitud > 50 caracteres (es una frase, no un código).
+### `src/features/costos-productos/CostosProductosPage.tsx`
 
-Implementación:
-- Nueva opción en `MappingOptions`: `textFilterKey?: TKey` (la clave que actúa como "código" — para costos será `referencia`, para listas también).
-- Si la celda en esa columna matchea un patrón "total", se descarta y se cuenta en `skippedRows` con warning agregado: *"X filas descartadas por ser totales o subtotales"*.
+1. Reestructurar `COLUMNS` como una lista de **secciones**:
+   ```ts
+   type Section =
+     | { kind: "cols"; cols: ColDef[] }
+     | { kind: "group"; id: "cu" | "ct"; label: string; cols: ColDef[] };
+   ```
+   Orden:
+   - cols: `grupo`, `referencia`, `descripcion`, `cant`
+   - group `cu`: `cumat`, `cumo`, `cunago`
+   - cols: (nada entre medio)
+   - group `ct`: `ctmat`, `ctmo`, `ctsit`
+   - cols: `pct_part`, `cifu`, `mou`, `ctu`, `ct`, `puv`, `preciotot`, `pct_cto`
 
-### Aplicar el filtro en costos y en listas de precios
+2. Estado: `const [expanded, setExpanded] = useState<{cu: boolean; ct: boolean}>({cu: false, ct: false})`.
 
-- `src/features/costos-productos/CostosProductosPage.tsx`: pasar `textFilterKey: "referencia"` al `<ImportWizardDialog>`.
-- `src/features/listas-precios/ListasPreciosPage.tsx`: lo mismo.
+3. Render del `<TableHeader>`: iterar `SECTIONS` y para cada `group` colapsado mostrar **un solo `<TableHead>`** con un `<Button variant="ghost" size="sm">` (`+ CU` / `+ CT desglose`). Para cada `group` expandido, mostrar todas sus columnas; en la última añadir un mini botón `−` para colapsar de nuevo.
 
-### Mostrar el descarte en la preview del wizard
+4. Render del `<TableBody>`: para cada fila, iterar las mismas secciones. Si el grupo está colapsado, renderizar una celda con `<span className="text-muted-foreground">…</span>`. Si está expandido, renderizar las celdas normales.
 
-Ya existe el bloque de warnings en el paso 3. El nuevo warning aparecerá ahí automáticamente, así el usuario ve *"3 filas descartadas por ser totales"* antes de confirmar.
+5. Calcular `colSpan` total dinámicamente para los estados de "loading" y "vacío":
+   ```ts
+   const visibleColCount = SECTIONS.reduce((n, s) =>
+     n + (s.kind === "cols" || expanded[s.id] ? s.cols.length : 1), 0);
+   ```
+
+6. Iconos: usar `ChevronRight` (colapsado) y `ChevronDown` (expandido) de `lucide-react` junto al label del grupo, en lugar de `+` / `−`, para look consistente con el resto del proyecto.
 
 ## Archivos a tocar
 
-1. `src/lib/excel.ts` — añadir helper `isTotalLikeValue(v)` y aplicarlo en `parseExcelWithMapping` cuando se define `textFilterKey`.
-2. `src/features/costos-productos/CostosProductosPage.tsx` — pasar `textFilterKey="referencia"` al wizard.
-3. `src/features/listas-precios/ListasPreciosPage.tsx` — pasar `textFilterKey="referencia"` al wizard.
-4. `src/components/excel/ImportWizardDialog.tsx` — añadir prop `textFilterKey` y pasarla al parser.
+- `src/features/costos-productos/CostosProductosPage.tsx` — refactor de `COLUMNS` a secciones + estado de expansión + render condicional en header y body.
 
-## Resultado esperado
+## Resultado
 
-- Filas con "TOTAL", "SUBTOTAL", "Total general", etc. se descartan automáticamente en cualquier import (costos y listas).
-- El usuario ve cuántas se descartaron antes de confirmar.
-- Las referencias guardadas en BD coinciden limpias entre `sales`, `product_costs` y `price_list_items`, así los joins de rentabilidad funcionan sin basura.
-- **Sin** crear tabla maestra ni complicar el flujo de import.
+- Tabla por defecto compacta y legible en 1280px sin scroll horizontal forzado.
+- Usuario puede ver el desglose de CU o CT con un clic, y volver a esconderlo igual de rápido.
+- Estado independiente por grupo: puede expandir solo CU, solo CT, ambos o ninguno.
 
