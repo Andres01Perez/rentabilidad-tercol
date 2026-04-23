@@ -230,6 +230,91 @@ function RankingCard({
   );
 }
 
+type SortKey =
+  | "sale_date"
+  | "vendedor"
+  | "dependencia"
+  | "tercero"
+  | "referencia"
+  | "cantidad"
+  | "precio_unitario"
+  | "ctu"
+  | "margenU"
+  | "margenPct";
+type SortDir = "asc" | "desc";
+type ColFilters = Record<SortKey, string>;
+
+type NumFilter =
+  | { kind: "eq"; a: number }
+  | { kind: "gt"; a: number }
+  | { kind: "gte"; a: number }
+  | { kind: "lt"; a: number }
+  | { kind: "lte"; a: number }
+  | { kind: "range"; a: number; b: number };
+
+function parseNumLiteral(s: string): number | null {
+  // Limpia separadores de miles y acepta coma decimal.
+  const cleaned = s.replace(/\s+/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+  if (cleaned === "" || cleaned === "-" || cleaned === "+") return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseNumFilter(input: string): NumFilter | null {
+  const s = input.trim();
+  if (!s) return null;
+  if (s.startsWith(">=")) {
+    const a = parseNumLiteral(s.slice(2));
+    return a === null ? null : { kind: "gte", a };
+  }
+  if (s.startsWith("<=")) {
+    const a = parseNumLiteral(s.slice(2));
+    return a === null ? null : { kind: "lte", a };
+  }
+  if (s.startsWith(">")) {
+    const a = parseNumLiteral(s.slice(1));
+    return a === null ? null : { kind: "gt", a };
+  }
+  if (s.startsWith("<")) {
+    const a = parseNumLiteral(s.slice(1));
+    return a === null ? null : { kind: "lt", a };
+  }
+  // Rango "a-b" (admite negativos en a sólo si no inicia con "-")
+  const m = s.match(/^(-?\d[\d.,]*)\s*-\s*(-?\d[\d.,]*)$/);
+  if (m) {
+    const a = parseNumLiteral(m[1]);
+    const b = parseNumLiteral(m[2]);
+    if (a === null || b === null) return null;
+    return { kind: "range", a: Math.min(a, b), b: Math.max(a, b) };
+  }
+  const a = parseNumLiteral(s);
+  return a === null ? null : { kind: "eq", a };
+}
+
+function matchNumFilter(value: number | null | undefined, f: NumFilter | null): boolean {
+  if (!f) return true;
+  if (value === null || value === undefined || !Number.isFinite(value)) return false;
+  switch (f.kind) {
+    case "eq":
+      return Math.abs(value - f.a) < 0.5;
+    case "gt":
+      return value > f.a;
+    case "gte":
+      return value >= f.a;
+    case "lt":
+      return value < f.a;
+    case "lte":
+      return value <= f.a;
+    case "range":
+      return value >= f.a && value <= f.b;
+  }
+}
+
+function matchTextFilter(value: string | null | undefined, q: string): boolean {
+  if (!q.trim()) return true;
+  return (value ?? "").toLowerCase().includes(q.trim().toLowerCase());
+}
+
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
