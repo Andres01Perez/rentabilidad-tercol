@@ -360,6 +360,7 @@ function CostosUploadWizard({
         numericKeys={NUMERIC_KEYS}
         submitLabel="Subir costos"
         onConfirm={handleConfirm}
+        textFilterKey="referencia"
         extraStep1={
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
