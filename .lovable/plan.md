@@ -1,113 +1,112 @@
-## Plan: tabla "Detalle de ventas" expandida + ordenamiento + filtros por columna
 
-Tres mejoras coordinadas sobre la tabla detalle al final de `/analisis-ventas`:
-1. **Más alta**: aprovechar mejor el espacio vertical.
-2. **Ordenamiento por columna**: clic en cabecera para ordenar asc/desc.
-3. **Filtros por columna**: caja de búsqueda específica por columna (texto y rangos numéricos) además del buscador global ya existente.
+# Plan: Calculadora de rentabilidad (/calculadora)
 
-Todo se implementa **dentro de `AnalisisVentasPage.tsx`** sin cambios a `useSalesAnalytics.ts` ni a la BD.
+Vista nueva, completa y guiada paso a paso. Reutiliza convenciones de Análisis de ventas (KPI cards, tabla con sort/filtros, gráficos Recharts) y los formatos de moneda y porcentaje existentes.
 
----
-
-### 1. Altura de la tabla
-
-Hoy el contenedor es `max-h-[500px]`. Cambio a una altura responsive: `max-h-[calc(100vh-200px)] min-h-[600px]`. Mucho más alta en pantallas grandes y mínimo cómodo en pequeñas. El `overflow-auto` se conserva y los headers `sticky top-0` siguen visibles al hacer scroll.
-
-Bonus: subo el límite de filas mostradas de **500 a 2000** para aprovechar la nueva altura.
-
----
-
-### 2. Ordenamiento por columna
-
-Estado nuevo:
-
-```ts
-type SortKey = "sale_date" | "vendedor" | "dependencia" | "tercero"
-             | "referencia" | "cantidad" | "precio_unitario"
-             | "ctu" | "margenU" | "margenPct";
-type SortDir = "asc" | "desc";
-const [sortKey, setSortKey] = useState<SortKey>("sale_date");
-const [sortDir, setSortDir] = useState<SortDir>("desc");
-```
-
-Cada `<TableHead>` se vuelve clickeable:
-- Clic en columna nueva → `sortDir = "asc"`.
-- Clic en la columna activa → alterna `asc` ↔ `desc`.
-- Indicador: ícono `ChevronUp`/`ChevronDown` cuando está activa; `ChevronsUpDown` tenue cuando no.
-
-`detailRows` se extiende para aplicar el sort tras los filtros:
-- Numérico: `cantidad`, `precio_unitario`, `ctu`, `margenU` (`precio_unitario - ctu`), `margenPct`.
-- Texto: `vendedor`, `dependencia`, `tercero`, `referencia` (con `localeCompare`).
-- Fecha: `sale_date` (string ISO, comparación lexicográfica).
-
-Nulos siempre al final, sin importar dirección.
-
----
-
-### 3. Filtros por columna
-
-Mantengo el buscador global existente y agrego una **fila de filtros bajo el header**, con un input compacto por columna:
+## Flujo de usuario
 
 ```text
-| Fecha | Vendedor | Dependencia | Tercero | Ref | Cant | PUV | CTU | Mar U. | Mar % |  ← header (sortable)
-| [≥]   | [text]   | [text]      | [text]  |[txt]| [≥]  | [≥] | [≥] |  [≥]   |  [≥]  |  ← filter inputs
+[1] Fuente de precios          [2] Meses de costos        [3] Meses operacionales      [4] Calcular
+─────────────────────────  →   ────────────────────────  → ────────────────────────  → ────────────
+Lista de precios  ó             Multi-select de meses        Multi-select de meses          Botón
+Negociación                     (uno o varios)               (uno o varios)                "Calcular
+                                Muestra % por mes            Muestra % por mes              rentabilidad"
+                                + promedio resultante        + promedio resultante
 ```
 
-Estado:
+Cada paso vive en su propia tarjeta. Hasta que un paso esté completo, el siguiente queda deshabilitado con un mensaje "Completa el paso anterior". El botón "Calcular" sólo se activa cuando los 3 pasos están listos.
 
-```ts
-const [colFilters, setColFilters] = useState({
-  sale_date: "", vendedor: "", dependencia: "", tercero: "", referencia: "",
-  cantidad: "", precio_unitario: "", ctu: "", margenU: "", margenPct: "",
-});
-```
+## Estructura de la página
 
-**Sintaxis numérica** (parser pequeño y predecible):
-- `100` → exacto (tolerancia ±0.5)
-- `>100`, `>=100`, `<100`, `<=100` → comparación
-- `10-100` → rango inclusivo
-- vacío o inválido → sin filtro
-- Limpia separadores de miles y acepta `,` como decimal.
+1. **Paso 1 – Fuente de precios**
+   - Toggle "Lista de precios" / "Negociación".
+   - Combobox buscable con las opciones disponibles (consulta a `price_lists` o `negotiations`).
+   - Resumen al elegir: nombre, # items, total estimado.
 
-**UI**:
-- Inputs compactos (`h-7 text-xs`).
-- Placeholder: texto = `"Filtrar…"`, numérico = `">0"`.
-- Botón **"Limpiar filtros"** a la derecha del header de la tabla cuando hay al menos un filtro activo (incluye el buscador global). Resetea todo.
+2. **Paso 2 – Meses de costos de producto**
+   - Multi-select de meses (chips removibles) usando los meses disponibles en `product_costs.period_month` (DISTINCT).
+   - Tabla compacta de meses elegidos con: # productos, fecha. Útil para auditar.
+   - Cuando hay ≥2 meses: badge "Promedio aplicado".
+   - Cálculo: por cada `referencia` se promedia el `ctu` entre los meses seleccionados (ignorando meses sin dato para esa referencia). Se guarda el detalle por mes para mostrarlo en una columna expandible o tooltip.
 
-**Combinación**: AND entre columnas + AND con el buscador global. Pipeline en `useMemo`:
+3. **Paso 3 – Meses de costos operacionales**
+   - Multi-select de meses, mismo patrón.
+   - Tabla con: mes, suma de % de centros activos, conteo de centros.
+   - Promedio resultante en grande (ej: "Promedio: 12.34%").
+   - Cálculo: por cada mes elegido se suma `operational_costs.percentage` (joineado a `cost_centers` activos). Luego se promedian los totales mensuales. Tooltip explica la fórmula.
+
+4. **Paso 4 – Botón "Calcular rentabilidad"**
+   - Dispara el cómputo en cliente (no requiere RPC). Muestra spinner.
+
+5. **Resultado**
+   - **KPIs (5–6 cards)**: Items calculados, Precio total, Costo total (CTU promedio × cant=1 base), Margen bruto total, Margen bruto %, Margen neto % (luego de op).
+   - **Tabla de rentabilidad** (parecida a Análisis de ventas, mejorada):
+     - Columnas: Ref (Montserrat bold), Descripción, Precio venta, Descuento %, Precio neto, CTU promedio, Margen unitario, Margen %, Margen neto unitario, Margen neto %, Tag (negociación: precio efectivo con descuento; lista: precio sin descuento).
+     - Encabezados con sort asc/desc en todas (componente `SortableHead` ya existente, lo extraemos a un compartido).
+     - Fila de filtros por columna (texto y operadores numéricos `>`, `>=`, `<`, `<=`, `a-b`) — reutilizamos `parseNumFilter` / `matchNumFilter` de `AnalisisVentasPage`.
+     - Búsqueda global por ref/descripción.
+     - Botón "Limpiar filtros".
+     - Resaltado de filas: rojo suave si margen neto < 0; ámbar si margen neto entre 0 y 5%.
+     - Tooltip por fila con desglose del CTU mensual cuando hay varios meses.
+     - Altura responsiva con scroll vertical sólo en el cuerpo (header sticky); sin scroll horizontal en >=lg, scroll horizontal sólo en mobile.
+   - **Gráficos (Recharts)** con insights:
+     1. **Top 10 productos por margen bruto absoluto** (BarChart horizontal).
+     2. **Top 10 productos con peor margen %** (BarChart, rojo) — alerta de productos que destruyen valor.
+     3. **Distribución de margen %** (Histogram via BarChart con buckets: <0%, 0-10, 10-20, 20-30, 30-40, 40+) — ver la salud general del portafolio.
+     4. **Scatter precio vs margen %** (ScatterChart) — detectar productos caros con margen bajo.
+   - **Exportar a Excel**: botón "Descargar Excel" arriba de la tabla. Genera un `.xlsx` con hojas:
+     - "Rentabilidad" — todas las columnas de la tabla (respetando filtros y orden actuales).
+     - "Resumen" — selecciones (fuente, meses, % op promedio) + KPIs.
+     - "Costos por mes" — desglose CTU por referencia y mes seleccionado.
+
+## Lógica de cálculo (por producto)
+
+Variables: `precio` (de la lista o negociación), `descuento_pct` (sólo si negociación), `ctu_prom`, `op_prom_pct`.
 
 ```text
-analytics.filteredRows  →  buscador global  →  filtros por columna  →  sort  →  slice(0, 2000)
+precio_neto       = precio * (1 - descuento_pct/100)        # si lista, descuento = 0
+margen_unit       = precio_neto - ctu_prom
+margen_pct        = margen_unit / precio_neto * 100
+margen_neto_unit  = margen_unit - precio_neto * (op_prom_pct/100)
+margen_neto_pct   = margen_neto_unit / precio_neto * 100
 ```
 
----
+Si `ctu_prom` es null (no hay costo en ningún mes elegido para esa ref) → fila se muestra con margen "—" y badge "Sin costo".
 
-### 4. Pequeños ajustes UI
+## Datos a consultar
 
-- Contador: `"Mostrando X de Y líneas"` ya está; añado `(filtradas: Z)` cuando hay filtros por columna activos.
-- Header de la sección: `flex flex-wrap items-center justify-between gap-3` para acomodar el botón "Limpiar filtros" sin romper en mobile.
-- Cabeceras clickeables: `cursor-pointer select-none hover:text-foreground transition-colors` con `gap-1`.
+- `price_lists` y `negotiations`: listado para combobox.
+- Al elegir fuente:
+  - Lista → `price_list_items` (referencia, descripcion, precio).
+  - Negociación → `negotiation_items` (referencia, descripcion, precio_unitario, descuento_pct, precio_venta, cantidad).
+- `product_costs` filtrado por `period_month IN (…)` con paginación 1000.
+- `operational_costs` filtrado por `period_month IN (…)` joineado con `cost_centers` activos.
+- DISTINCT meses disponibles para los multi-selects.
 
----
+Todo lectura, sin migraciones de BD.
 
-### 5. Archivos afectados
+## Detalles técnicos
 
-**Único archivo modificado**: `src/features/analisis-ventas/AnalisisVentasPage.tsx`
-- Nuevos imports de `lucide-react`: `ChevronUp`, `ChevronDown`, `ChevronsUpDown`.
-- Estado: `sortKey`, `sortDir`, `colFilters`.
-- Helpers locales: `parseNumFilter` y `matchNumFilter`.
-- `detailRows` extendido (filtros por columna → sort → slice 2000).
-- JSX de la tabla: cabeceras como botones, fila de filtros, botón "Limpiar filtros", contenedor con altura nueva.
+- Nuevos archivos:
+  - `src/features/calculadora/CalculadoraPage.tsx` — composición de la página y los pasos.
+  - `src/features/calculadora/useCalculadora.ts` — hook con estado de pasos, fetch on demand y cálculo memoizado.
+  - `src/features/calculadora/StepCard.tsx` — wrapper visual de cada paso (numerado 1/2/3/4).
+  - `src/features/calculadora/MultiMonthPicker.tsx` — popover con checkbox por mes (usa `lastNMonths` y filtra a meses con datos).
+  - `src/features/calculadora/RentabilidadTable.tsx` — tabla con sort + filtros + export.
+  - `src/features/calculadora/RentabilidadCharts.tsx` — los 4 charts.
+  - `src/features/calculadora/exportExcel.ts` — usa `xlsx` (ya instalado) para construir el workbook.
+  - `src/lib/tableFilters.ts` — extraer `parseNumFilter`, `matchNumFilter`, `matchTextFilter`, `SortableHead`, `FilterCell` desde `AnalisisVentasPage` para reusar (refactor sin cambios de comportamiento).
+- Reemplazar `src/routes/_app/calculadora.tsx`:
+  - Cambiar el `PagePlaceholder` por `<CalculadoraPage />` y actualizar `head()` con título y descripción reales.
+- Sidebar: el ítem "Calculadora" ya existe y apunta a `/calculadora` (no requiere cambios).
+- Tipografía Montserrat bold para la columna `Ref` en la tabla, consistente con la negociación.
+- Responsive: layout `grid-cols-1 xl:grid-cols-3` para los pasos 1–3 (en xl se ven en una fila); KPI grid `grid-cols-2 md:grid-cols-3 xl:grid-cols-6`.
+- Performance: cálculos memoizados; las consultas se disparan sólo al pulsar "Calcular".
 
-**Sin cambios**: `useSalesAnalytics.ts`, BD, otros componentes.
+## Resultado esperado para el usuario
 
----
-
-### 6. Resultado esperado
-
-- Tabla ocupa ~70-80% del viewport en alto, mostrando muchas más filas sin scroll del navegador.
-- Cada cabecera ordena al hacer clic (asc → desc), con indicador visual.
-- Bajo cada cabecera hay un input de filtro: texto o numérico (`>100`, `<50`, `10-100`, `100`).
-- Filtros se combinan en AND con el buscador global.
-- Botón "Limpiar filtros" resetea todo cuando hay filtros activos.
-- Hasta 2000 filas mostradas (vs 500 anterior).
+- Una página guiada en 4 pasos visualmente claros.
+- Cada paso muestra explícitamente los % por mes y el promedio cuando elige varios.
+- Una tabla potente (sort, filtros por columna, search global, export Excel) con la rentabilidad de cada producto de la fuente elegida.
+- Cuatro gráficos accionables: quién aporta más margen, quién destruye, cómo se distribuye la rentabilidad y el cruce precio/margen.
+- Botón para descargar todo a Excel con tres hojas de detalle.
