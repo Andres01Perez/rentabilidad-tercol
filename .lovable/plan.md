@@ -1,74 +1,149 @@
 
 
-# Plan: agrupar columnas colapsables en la tabla de costos
+# Plan: rediseño visual (orden sidebar + destacar Calculadora + nueva paleta negro/gris/rojo)
 
-## Cambio
+Tres mejoras visuales coordinadas. Hago las tres en una sola pasada porque comparten archivos (`AppSidebar.tsx` y `styles.css`) y así evitamos repintar dos veces.
 
-Agrupar dos bloques de columnas en la tabla de `/costos-productos` con un control `+ / −` en el encabezado para expandir/colapsar. Por defecto, ambos grupos quedan **colapsados** para que la tabla quepa cómoda.
+## 1. Reordenar sidebar: Negocios fijos arriba de Calculadora
 
-### Grupos
+En `src/components/layout/AppSidebar.tsx`, dentro del array `analisis`, mover `Negocios fijos` antes de `Calculadora`:
 
-- **Costos unitarios (CU)** → `CUMAT`, `CUMO`, `CUNAGO`
-- **Costos totales (CT desglose)** → `CTMAT`, `CTMO`, `CTSIT`
-
-### Siempre visibles
-
-`GRUPO`, `REF`, `DESCRIPCIÓN`, `CANT`, `%PART`, `CIFU`, `MOU`, `CTU`, `CT`, `PUV`, `PRECIOTOT`, `%CTO`.
-
-## UX
-
-- En la fila de encabezados, donde antes estaban las 3 columnas del grupo, aparece **una sola celda** con el nombre del grupo (`CU` / `CT desglose`) y un botón pequeño con `+` (colapsado) o `−` (expandido).
-- Al hacer clic en `+`, esa celda se reemplaza por las 3 columnas del grupo y aparece un `−` en la última de ellas (o en una celda compacta al inicio del grupo) para volver a colapsar.
-- Las celdas del cuerpo respetan el estado: cuando el grupo está colapsado, en su lugar se muestra una celda con `…` muteada (sin valores numéricos) para mantener la tabla alineada y dar pista visual de que hay datos ocultos.
-- Estado se guarda en `React.useState` local (no persiste). Sin animaciones complejas — solo cambio inmediato del layout.
-
-```text
-Colapsado:
-| GRUPO | REF | DESC | CANT | [+ CU] | [+ CT desglose] | %PART | CIFU | ... |
-|       |     |      |  10  |   …    |       …         |   …   |  …   |     |
-
-Expandido CU:
-| GRUPO | REF | DESC | CANT | CUMAT | CUMO | CUNAGO [−] | [+ CT desglose] | %PART | ... |
+```ts
+const analisis: NavItem[] = [
+  { title: "Negocios fijos", to: "/negocios-fijos", icon: Briefcase },
+  { title: "Calculadora", to: "/calculadora", icon: Calculator },
+  { title: "Análisis de ventas", to: "/analisis-ventas", icon: TrendingUp },
+  { title: "Historial", to: "/historial", icon: History },
+];
 ```
 
-## Implementación técnica
+## 2. Destacar "Calculadora" como opción estrella
 
-### `src/features/costos-productos/CostosProductosPage.tsx`
+La idea: que visualmente grite "esto es lo importante". Tratamiento especial dentro de `NavGroup` cuando `item.to === "/calculadora"`:
 
-1. Reestructurar `COLUMNS` como una lista de **secciones**:
-   ```ts
-   type Section =
-     | { kind: "cols"; cols: ColDef[] }
-     | { kind: "group"; id: "cu" | "ct"; label: string; cols: ColDef[] };
-   ```
-   Orden:
-   - cols: `grupo`, `referencia`, `descripcion`, `cant`
-   - group `cu`: `cumat`, `cumo`, `cunago`
-   - cols: (nada entre medio)
-   - group `ct`: `ctmat`, `ctmo`, `ctsit`
-   - cols: `pct_part`, `cifu`, `mou`, `ctu`, `ct`, `puv`, `preciotot`, `pct_cto`
+- **Fondo permanente con gradiente brand** (no solo en hover/active): `bg-gradient-brand` con opacidad sutil cuando no está activa, opacidad llena cuando sí.
+- **Texto blanco siempre + ícono blanco**, peso `font-semibold`.
+- **Halo/glow**: `shadow-elegant` permanente para que "flote" sobre las demás opciones.
+- **Badge "Pro"** o ícono `Sparkles` pequeño a la derecha del label cuando el sidebar está expandido, para reforzar el mensaje de "esta es la magia".
+- **Sin la barra lateral de active** (la barrita izquierda) — el tratamiento visual ya es suficientemente fuerte; la barra haría ruido.
+- En estado colapsado: el botón de Calculadora mantiene el fondo gradiente (un cuadradito brillante entre íconos grises).
 
-2. Estado: `const [expanded, setExpanded] = useState<{cu: boolean; ct: boolean}>({cu: false, ct: false})`.
+Implementación: añadir flag `featured?: boolean` al tipo `NavItem`, marcar `Calculadora` con `featured: true`, y dentro del render del item aplicar clases condicionales si `item.featured`.
 
-3. Render del `<TableHeader>`: iterar `SECTIONS` y para cada `group` colapsado mostrar **un solo `<TableHead>`** con un `<Button variant="ghost" size="sm">` (`+ CU` / `+ CT desglose`). Para cada `group` expandido, mostrar todas sus columnas; en la última añadir un mini botón `−` para colapsar de nuevo.
+## 3. Nueva paleta: negro, gris y rojo (identidad oscura/elegante)
 
-4. Render del `<TableBody>`: para cada fila, iterar las mismas secciones. Si el grupo está colapsado, renderizar una celda con `<span className="text-muted-foreground">…</span>`. Si está expandido, renderizar las celdas normales.
+Cambio completo de `src/styles.css`. Mantenemos la estructura (variables oklch, `@theme inline`, utilidades `.glass`, `.bg-gradient-brand`, etc.) — solo reasignamos valores.
 
-5. Calcular `colSpan` total dinámicamente para los estados de "loading" y "vacío":
-   ```ts
-   const visibleColCount = SECTIONS.reduce((n, s) =>
-     n + (s.kind === "cols" || expanded[s.id] ? s.cols.length : 1), 0);
-   ```
+### Paleta nueva (modo claro queda igualmente oscuro/grisáceo, no blanco puro)
 
-6. Iconos: usar `ChevronRight` (colapsado) y `ChevronDown` (expandido) de `lucide-react` junto al label del grupo, en lugar de `+` / `−`, para look consistente con el resto del proyecto.
+Para que el look sea **negro/gris/rojo con identidad estética**, el `:root` ya no será fondo blanco. Lo convertimos a un esquema oscuro elegante por defecto (gris muy oscuro casi negro), con acentos en rojo. El `.dark` queda aún más profundo (negro puro).
+
+Valores propuestos para `:root` (modo principal de la app):
+
+```css
+--background: oklch(0.14 0.005 270);        /* gris muy oscuro casi negro */
+--foreground: oklch(0.96 0.003 270);        /* casi blanco */
+--card: oklch(0.18 0.005 270);              /* gris oscuro elevado */
+--card-foreground: oklch(0.96 0.003 270);
+--popover: oklch(0.18 0.005 270);
+--popover-foreground: oklch(0.96 0.003 270);
+--primary: oklch(0.58 0.22 25);             /* rojo vibrante */
+--primary-foreground: oklch(0.99 0 0);
+--secondary: oklch(0.22 0.005 270);         /* gris medio oscuro */
+--secondary-foreground: oklch(0.96 0.003 270);
+--muted: oklch(0.20 0.004 270);
+--muted-foreground: oklch(0.65 0.01 270);
+--accent: oklch(0.24 0.006 270);
+--accent-foreground: oklch(0.96 0.003 270);
+--destructive: oklch(0.62 0.24 25);         /* rojo destructivo (mismo tono familia) */
+--border: oklch(1 0 0 / 0.08);              /* borde sutil sobre fondo oscuro */
+--input: oklch(1 0 0 / 0.10);
+--ring: oklch(0.58 0.22 25);                /* rojo */
+
+--sidebar: oklch(0.12 0.004 270 / 80%);     /* aún más oscuro que el bg, glassy */
+--sidebar-foreground: oklch(0.92 0.003 270);
+--sidebar-primary: oklch(0.58 0.22 25);
+--sidebar-primary-foreground: oklch(0.99 0 0);
+--sidebar-accent: oklch(0.22 0.005 270);
+--sidebar-accent-foreground: oklch(0.96 0.003 270);
+--sidebar-border: oklch(1 0 0 / 0.08);
+--sidebar-ring: oklch(0.58 0.22 25);
+```
+
+### Brand gradients (reemplazan azul/púrpura/naranja)
+
+```css
+--brand-red: oklch(0.58 0.22 25);
+--brand-red-deep: oklch(0.45 0.20 22);
+--brand-charcoal: oklch(0.22 0.005 270);
+
+--gradient-brand: linear-gradient(135deg,
+  oklch(0.55 0.22 25) 0%,
+  oklch(0.40 0.18 22) 55%,
+  oklch(0.18 0.01 270) 100%);
+
+--gradient-brand-soft: linear-gradient(135deg,
+  oklch(0.58 0.22 25 / 0.18) 0%,
+  oklch(0.45 0.18 22 / 0.10) 60%,
+  oklch(0.20 0.005 270 / 0.05) 100%);
+
+--gradient-text: linear-gradient(120deg,
+  oklch(0.70 0.22 25) 0%,
+  oklch(0.55 0.20 20) 50%,
+  oklch(0.85 0.05 25) 100%);
+```
+
+### Glass + sombras (más dramáticas sobre fondo oscuro)
+
+```css
+--glass-bg: oklch(0.20 0.005 270 / 0.55);
+--glass-border: oklch(1 0 0 / 0.08);
+--shadow-glass:
+  0 1px 0 0 oklch(1 0 0 / 0.05) inset,
+  0 10px 40px -12px oklch(0 0 0 / 0.55),
+  0 4px 16px -8px oklch(0 0 0 / 0.40);
+--shadow-elegant: 0 20px 60px -20px oklch(0.55 0.22 25 / 0.35);  /* glow rojo */
+--shadow-soft:
+  0 1px 2px 0 oklch(0 0 0 / 0.20),
+  0 4px 12px -4px oklch(0 0 0 / 0.30);
+```
+
+### `.dark` queda igual estructura pero aún más profundo (negro puro)
+
+```css
+.dark {
+  --background: oklch(0.08 0.002 270);   /* casi negro puro */
+  --card: oklch(0.13 0.004 270);
+  --sidebar: oklch(0.10 0.003 270 / 85%);
+  /* resto hereda del mismo lenguaje, con misma familia roja */
+}
+```
+
+### Charts: actualizar a tonos rojo/gris/cobre
+
+```css
+--chart-1: oklch(0.62 0.22 25);    /* rojo principal */
+--chart-2: oklch(0.45 0.15 25);    /* rojo oscuro */
+--chart-3: oklch(0.75 0.10 30);    /* coral/salmón */
+--chart-4: oklch(0.55 0.02 270);   /* gris medio */
+--chart-5: oklch(0.35 0.01 270);   /* gris oscuro */
+```
+
+### Por qué este look funciona
+
+- **Fondo casi negro** hace que los `.glass` cards (con `backdrop-filter: blur(12px)` y borde `oklch(1 0 0 / 0.08)`) parezcan flotar e iluminarse — exactamente lo que pediste de "que resalten más los glass".
+- **Rojo como único color de acento** + escala de grises = identidad visual fuerte, premium, tipo Tesla / Stripe dashboard / Linear.
+- El gradiente brand (rojo → carbón) se ve dramático en botones y en el ítem destacado de Calculadora.
 
 ## Archivos a tocar
 
-- `src/features/costos-productos/CostosProductosPage.tsx` — refactor de `COLUMNS` a secciones + estado de expansión + render condicional en header y body.
+1. **`src/styles.css`** — reemplazar bloques `:root`, `.dark` y los gradientes brand con la nueva paleta.
+2. **`src/components/layout/AppSidebar.tsx`** — reordenar `analisis`, añadir `featured` flag, aplicar tratamiento visual especial para `/calculadora`.
 
-## Resultado
+## Resultado esperado
 
-- Tabla por defecto compacta y legible en 1280px sin scroll horizontal forzado.
-- Usuario puede ver el desglose de CU o CT con un clic, y volver a esconderlo igual de rápido.
-- Estado independiente por grupo: puede expandir solo CU, solo CT, ambos o ninguno.
+- Sidebar: orden Negocios fijos → Calculadora → Análisis de ventas → Historial.
+- Calculadora se ve como un botón "premium" con fondo gradiente rojo-carbón permanente, ícono Sparkles a su lado, sombra con glow rojo. Imposible no verla.
+- Toda la app pasa a un esquema oscuro elegante negro/gris con rojo como único acento. Glass cards resaltan mucho más por el contraste con el fondo oscuro. Sin rastro de azul/púrpura/naranja.
+- Al final: te enseño y si quieres ajustamos saturación del rojo (más sangre vs más coral) o si prefieres modo claro grisáceo en lugar de oscuro casi negro.
 
