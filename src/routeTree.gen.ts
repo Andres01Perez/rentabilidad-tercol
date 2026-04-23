@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppNegociacionesRouteImport } from './routes/_app/negociaciones'
 import { Route as AppListasPreciosRouteImport } from './routes/_app/listas-precios'
 import { Route as AppHistorialRouteImport } from './routes/_app/historial'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
@@ -33,6 +34,11 @@ const AppRoute = AppRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNegociacionesRoute = AppNegociacionesRouteImport.update({
+  id: '/negociaciones',
+  path: '/negociaciones',
   getParentRoute: () => AppRoute,
 } as any)
 const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/historial': typeof AppHistorialRoute
   '/listas-precios': typeof AppListasPreciosRoute
+  '/negociaciones': typeof AppNegociacionesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/historial': typeof AppHistorialRoute
   '/listas-precios': typeof AppListasPreciosRoute
+  '/negociaciones': typeof AppNegociacionesRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/historial': typeof AppHistorialRoute
   '/_app/listas-precios': typeof AppListasPreciosRoute
+  '/_app/negociaciones': typeof AppNegociacionesRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/historial'
     | '/listas-precios'
+    | '/negociaciones'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/historial'
     | '/listas-precios'
+    | '/negociaciones'
     | '/'
   id:
     | '__root__'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/historial'
     | '/_app/listas-precios'
+    | '/_app/negociaciones'
     | '/_app/'
   fileRoutesById: FileRoutesById
 }
@@ -182,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/negociaciones': {
+      id: '/_app/negociaciones'
+      path: '/negociaciones'
+      fullPath: '/negociaciones'
+      preLoaderRoute: typeof AppNegociacionesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/listas-precios': {
@@ -252,6 +271,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppHistorialRoute: typeof AppHistorialRoute
   AppListasPreciosRoute: typeof AppListasPreciosRoute
+  AppNegociacionesRoute: typeof AppNegociacionesRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -264,6 +284,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppHistorialRoute: AppHistorialRoute,
   AppListasPreciosRoute: AppListasPreciosRoute,
+  AppNegociacionesRoute: AppNegociacionesRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
