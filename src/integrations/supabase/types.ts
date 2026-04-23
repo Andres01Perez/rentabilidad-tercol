@@ -81,9 +81,11 @@ export type Database = {
           cantidad: number
           created_at: string
           descripcion: string | null
+          descuento_pct: number
           id: string
           negotiation_id: string
           precio_unitario: number
+          precio_venta: number
           referencia: string
           source_price_list_id: string | null
           subtotal: number
@@ -92,9 +94,11 @@ export type Database = {
           cantidad: number
           created_at?: string
           descripcion?: string | null
+          descuento_pct?: number
           id?: string
           negotiation_id: string
           precio_unitario: number
+          precio_venta?: number
           referencia: string
           source_price_list_id?: string | null
           subtotal?: number
@@ -103,9 +107,11 @@ export type Database = {
           cantidad?: number
           created_at?: string
           descripcion?: string | null
+          descuento_pct?: number
           id?: string
           negotiation_id?: string
           precio_unitario?: number
+          precio_venta?: number
           referencia?: string
           source_price_list_id?: string | null
           subtotal?: number
