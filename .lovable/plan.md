@@ -1,105 +1,51 @@
 
 
-# Plan: import robusto de listas de precios con mapeo manual de columnas
+# Plan: importar costos con wizard (mes + hoja + fila + mapeo)
 
-## Problema actual
+Reutilizar el `ImportWizardDialog` ya existente (creado para `/listas-precios`) en `/costos-productos`. El componente ya soporta los 3 pasos (archivo → hoja+header+mapeo → preview) y acepta cualquier conjunto de campos vía props. Solo hay que adaptarlo a costos.
 
-`ListasPreciosPage` usa `parseExcel(file, COLUMN_MAP, ...)` con aliases fijos:
-- `referencia`: `["REFERENCIA", "REF", "Referencia"]`
-- `descripcion`: `["DESCRIPCION", "DESCRIPCIÓN", ...]`
-- `unidad_empaque`: `["UNIDAD DE EMPAQUE", "UND", ...]`
-- `precio`: `["LISTA DE PRECIOS", "PRECIO", ...]`
+## Cambios
 
-Si los headers del Excel del usuario no coinciden exactamente con esos aliases, falla con "Faltan columnas requeridas". Además:
-- Asume que la **primera hoja** y la **primera fila** contienen los headers.
-- Los Excels reales (como `LISTA_DE_PRECIOS_Oficial_2025.xlsx`) tienen **múltiples hojas** (notas, contactos, datos) y a veces **filas previas en blanco o con títulos** antes del header real.
+### `src/features/costos-productos/CostosProductosPage.tsx`
 
-## Solución: wizard de importación en 3 pasos
+1. **Eliminar el `UploadDialog` local** (todo el componente al final del archivo) y el `useEffect` con `parseExcel` automático.
+2. **Reemplazarlo por `<ImportWizardDialog>`** con esta configuración de campos:
+   - `referencia` *(obligatorio)* — alias: `["REFERENCIA","REF","Referencia","CODIGO","Código"]`
+   - `ctu` *(obligatorio)* — alias: `["CTU","CT U","COSTO TOTAL UNITARIO","Costo total unitario"]`
+   - `grupo` (opcional) — alias: `["GRUPO","Grupo","FAMILIA","CATEGORIA"]`
+   - `descripcion` (opcional) — alias: `["DESCRIPCION","DESCRIPCIÓN","Descripción","NOMBRE","PRODUCTO"]`
+   - `cant` (opcional, numérico)
+   - `cumat`, `cumo`, `cunago` (opcional, numéricos)
+   - `ctmat`, `ctmo`, `ctsit` (opcional, numéricos)
+   - `pct_part`, `cifu`, `mou`, `ct`, `puv`, `preciotot`, `pct_cto` (opcional, numéricos)
+3. **Selector de mes en `extraStep1`**: pasar el `MonthSelect` como contenido extra del paso 1, controlado por estado del padre (`uploadMonth`). `step1Valid={true}` (siempre hay mes por defecto).
+4. **`onConfirm`**: 
+   - Verifica si ya existen costos para ese mes (query `count`).
+   - Si existen, abre `AlertDialog` de confirmación; al aceptar, borra y reinserta.
+   - Si no, inserta directo con `chunkedInsert`.
+   - Cada fila se mapea a `product_costs` con `period_month`, `referencia`, `ctu`, `created_by_id/name` y los opcionales que vengan.
+   - Devuelve `true` para cerrar el wizard al terminar, o `false` si el usuario cancela el AlertDialog.
+5. **Numéricos**: pasar `numericKeys` con todas las columnas numéricas (`cant`, `cumat`, `cumo`, `cunago`, `ctmat`, `ctmo`, `ctsit`, `pct_part`, `cifu`, `mou`, `ctu`, `ct`, `puv`, `preciotot`, `pct_cto`).
+6. **Sin `zeroDropKey`**: en costos un CTU = 0 puede ser válido (producto en armado), no lo descartamos por defecto.
 
-Reemplazar el flujo "drop → parsea automático → preview" por un wizard guiado dentro del mismo `Dialog`:
+### `src/lib/excel.ts`
+No requiere cambios. `parseExcelWithMapping` ya soporta múltiples `requiredKeys` (le pasaremos `["referencia","ctu"]`).
 
-### Paso 1 — Archivo y hoja
-- Dropzone (existente).
-- Detectar todas las hojas del workbook con `XLSX.read`.
-- `Select` para elegir hoja (default: la primera con datos tabulares).
+## UX resultante
 
-### Paso 2 — Fila de encabezados + mapeo de columnas
-- Mostrar las **primeras 8 filas** de la hoja en una tabla compacta, cada fila con un radio para marcar **"esta es la fila de encabezados"**.
-  - Auto-sugerencia: la primera fila que contenga texto en ≥3 celdas no numéricas.
-- Una vez elegida, mostrar un panel de **mapeo manual**:
-  - `Referencia *` → Select con todas las columnas detectadas
-  - `Descripción` (opcional) → Select + opción "(no usar)"
-  - `Unidad de empaque` (opcional) → Select + opción "(no usar)"
-  - `Precio *` → Select
-- Auto-rellenar usando los aliases actuales como sugerencia inicial; el usuario puede sobrescribir.
-- Validación: `referencia` y `precio` son obligatorios; los demás opcionales.
+- Botón **"Subir Excel del mes"** abre el wizard.
+- **Paso 1**: selector de mes + dropzone.
+- **Paso 2**: elegir hoja → elegir fila de encabezados → mapear cada campo. Solo `Referencia` y `CTU` marcados con `*`. Los 16 opcionales aparecen pero se pueden dejar en "(no usar)".
+- **Paso 3**: preview con conteo de filas válidas/descartadas, warnings y tabla de muestra. Botón final **"Subir costos"**. Si el mes ya tiene datos, se muestra `AlertDialog` "Sobrescribir mes".
 
-### Paso 3 — Vista previa y limpieza
-- Tabla con primeras 10 filas mapeadas.
-- Resumen: "X filas válidas · Y descartadas (sin referencia o sin precio)".
-- Reglas de limpieza automáticas (ya aplicadas en backend de parseo):
-  - Trim de strings.
-  - Filas con todas las celdas vacías → descartadas.
-  - Filas sin `referencia` o sin `precio` numérico válido → descartadas.
-  - Precios con símbolos (`$`, `,`, `.`) → normalizados a número (la lógica ya existe en `parseExcel`).
-- Toggle opcional: **"Descartar filas con precio = 0"** (default ON).
-- Botón final: **Crear lista** / **Reemplazar lista**.
+## Resultado
 
-## Cambios técnicos
-
-### `src/lib/excel.ts` — extender API
-Añadir nueva función `parseExcelWithMapping`:
-```ts
-parseExcelSheets(file): Promise<{ sheetNames: string[]; previewBySheet: Record<string, unknown[][]> }>
-parseExcelWithMapping(file, {
-  sheetName, headerRowIndex,
-  mapping: Record<TKey, string | null>,  // header label → key, null = ignorar
-  numericKeys, requiredKeys
-}): Promise<ParsedExcelResult<TKey>>
-```
-- Lee sheet como matriz cruda (`sheet_to_json` con `header: 1`).
-- Toma `headerRowIndex` como fila de encabezados.
-- Mapea cada columna según el `mapping` provisto por el usuario.
-- Mantiene la lógica actual de coerción numérica y warnings.
-
-Mantener `parseExcel` original para no romper `analisis-ventas`, `costos-productos` y `costos-operacionales`.
-
-### `src/features/listas-precios/ListasPreciosPage.tsx`
-- Extraer el wizard a un nuevo componente compartido `ImportWizardDialog` para que `CreateListDialog` y `ReplaceListDialog` lo reutilicen.
-- Reemplazar el `useEffect` actual de auto-parse por el flujo de 3 pasos con state machine simple (`step: "file" | "map" | "preview"`).
-- Conservar los aliases actuales como **sugerencias automáticas** (no como única vía).
-
-### `src/components/excel/ColumnMapper.tsx` (nuevo)
-Componente reusable para el paso 2:
-- Props: `headers: string[]`, `sampleRows: unknown[][]`, `fields: { key, label, required, suggestedAliases }[]`, `value`, `onChange`.
-- Render: lista de filas `{label} → <Select>`, y debajo una tabla con las primeras 5 filas resaltando las columnas mapeadas.
-
-### `src/components/excel/SheetAndHeaderPicker.tsx` (nuevo)
-Componente para el paso 1:
-- Props: `workbook`, `value: { sheet, headerRow }`, `onChange`.
-- Render: select de hojas + tabla preview con radios para seleccionar fila de header.
-
-## UX details
-
-- Botones de navegación: **Atrás / Siguiente** entre pasos; **Crear / Reemplazar** solo activo en el paso 3.
-- Si el auto-detect encuentra todos los campos requeridos, mostrar un banner "Detectamos automáticamente las columnas. ¿Confirmas o prefieres mapearlas manualmente?" con dos botones (Continuar / Mapear manual).
-- Si el archivo tiene una sola hoja con datos válidos y headers en la fila 1, el wizard puede saltar directo al paso 3 (modo rápido).
+- Cualquier Excel de costos (incluso con hojas adicionales o filas previas vacías/títulos) se puede importar sin tocar código.
+- Solo `referencia` + `CTU` son obligatorios → suficiente para cálculo de rentabilidad.
+- Los demás campos opcionales se respetan si están presentes; si faltan, quedan en `null` en BD.
+- Mismo flujo y look consistente con el de listas de precios.
 
 ## Archivos a tocar
 
-1. `src/lib/excel.ts` — añadir `parseExcelSheets` y `parseExcelWithMapping` (sin romper API existente).
-2. `src/components/excel/ColumnMapper.tsx` — nuevo.
-3. `src/components/excel/SheetAndHeaderPicker.tsx` — nuevo.
-4. `src/components/excel/ImportWizardDialog.tsx` — nuevo (orquesta los 3 pasos).
-5. `src/features/listas-precios/ListasPreciosPage.tsx` — reemplazar `CreateListDialog` y `ReplaceListDialog` por uso del wizard.
-
-## Resultado esperado
-
-- Cualquier Excel con columnas equivalentes a referencia/descripción/unidad/precio se puede importar, sin importar:
-  - Nombres exactos de las columnas.
-  - Hojas adicionales con notas/contactos al inicio del workbook.
-  - Filas previas con títulos o blancos antes del header.
-- El usuario tiene control total: ve el preview, elige hoja, elige fila de header, mapea cada campo a la columna correcta.
-- Filas vacías o inválidas se descartan automáticamente con feedback claro.
-- Compatible con los archivos `LISTA_DE_PRECIOS_Oficial_2025.xlsx` y `LP_prueba_rentabilidad.xlsx` que adjuntaste.
+1. `src/features/costos-productos/CostosProductosPage.tsx` — reemplazar `UploadDialog` por `ImportWizardDialog` con los 18 campos y el `MonthSelect` en `extraStep1`.
 
