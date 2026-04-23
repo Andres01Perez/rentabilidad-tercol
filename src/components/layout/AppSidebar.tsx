@@ -44,7 +44,7 @@ const operacion: NavItem[] = [
 ];
 
 const analisis: NavItem[] = [
-  { title: "Negocios fijos", to: "/negocios-fijos", icon: Briefcase },
+  { title: "Negociaciones", to: "/negociaciones", icon: Briefcase },
   { title: "Calculadora", to: "/calculadora", icon: Calculator, featured: true },
   { title: "Análisis de ventas", to: "/analisis-ventas", icon: TrendingUp },
   { title: "Historial", to: "/historial", icon: History },
