@@ -73,18 +73,18 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-gradient-to-br p-5 shadow-sm backdrop-blur",
+        "min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br p-5 shadow-sm backdrop-blur",
         toneClasses,
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       </div>
-      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      <p className="mt-2 truncate text-xl font-bold tracking-tight md:text-2xl">{value}</p>
+      {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -274,7 +274,7 @@ export function AnalisisVentasPage() {
     typeof v === "number" ? formatCurrency(v) : String(v ?? "");
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-8 px-6 py-10 lg:px-10">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
       <PageHeader
         icon={TrendingUp}
         eyebrow="Análisis"
@@ -358,7 +358,7 @@ export function AnalisisVentasPage() {
           )}
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
             <KpiCard
               icon={Wallet}
               label="Ventas totales"
@@ -387,7 +387,7 @@ export function AnalisisVentasPage() {
               tone={analytics.kpis.margenNeto >= 0 ? "positive" : "negative"}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
             <KpiCard icon={ShoppingCart} label="Productos" value={formatNumber(analytics.kpis.productos)} />
             <KpiCard icon={Users} label="Clientes" value={formatNumber(analytics.kpis.clientes)} />
             <KpiCard icon={UserCheck} label="Vendedores" value={formatNumber(analytics.kpis.vendedores)} />
