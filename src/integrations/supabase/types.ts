@@ -76,6 +76,95 @@ export type Database = {
           },
         ]
       }
+      negotiation_items: {
+        Row: {
+          cantidad: number
+          created_at: string
+          descripcion: string | null
+          id: string
+          negotiation_id: string
+          precio_unitario: number
+          referencia: string
+          source_price_list_id: string | null
+          subtotal: number
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          negotiation_id: string
+          precio_unitario: number
+          referencia: string
+          source_price_list_id?: string | null
+          subtotal?: number
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          negotiation_id?: string
+          precio_unitario?: number
+          referencia?: string
+          source_price_list_id?: string | null
+          subtotal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negotiation_items_negotiation_id_fkey"
+            columns: ["negotiation_id"]
+            isOneToOne: false
+            referencedRelation: "negotiations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      negotiations: {
+        Row: {
+          created_at: string
+          created_by_id: string | null
+          created_by_name: string
+          id: string
+          items_count: number
+          name: string
+          notes: string | null
+          source_price_list_id: string | null
+          total: number
+          updated_at: string
+          updated_by_id: string | null
+          updated_by_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name: string
+          id?: string
+          items_count?: number
+          name: string
+          notes?: string | null
+          source_price_list_id?: string | null
+          total?: number
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_id?: string | null
+          created_by_name?: string
+          id?: string
+          items_count?: number
+          name?: string
+          notes?: string | null
+          source_price_list_id?: string | null
+          total?: number
+          updated_at?: string
+          updated_by_id?: string | null
+          updated_by_name?: string | null
+        }
+        Relationships: []
+      }
       operational_costs: {
         Row: {
           cost_center_id: string
@@ -381,7 +470,13 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      master_references: {
+        Row: {
+          descripcion: string | null
+          referencia: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
