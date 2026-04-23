@@ -358,7 +358,7 @@ export function AnalisisVentasPage() {
           )}
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
             <KpiCard
               icon={Wallet}
               label="Ventas totales"
@@ -387,7 +387,7 @@ export function AnalisisVentasPage() {
               tone={analytics.kpis.margenNeto >= 0 ? "positive" : "negative"}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
             <KpiCard icon={ShoppingCart} label="Productos" value={formatNumber(analytics.kpis.productos)} />
             <KpiCard icon={Users} label="Clientes" value={formatNumber(analytics.kpis.clientes)} />
             <KpiCard icon={UserCheck} label="Vendedores" value={formatNumber(analytics.kpis.vendedores)} />
