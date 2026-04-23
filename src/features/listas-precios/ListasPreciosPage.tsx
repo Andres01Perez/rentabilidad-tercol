@@ -309,6 +309,7 @@ function CreateListDialog({
       submitLabel="Crear lista"
       step1Valid={name.trim().length > 0}
       onConfirm={handleConfirm}
+      textFilterKey="referencia"
       extraStep1={
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -384,6 +385,7 @@ function ReplaceListDialog({
       zeroDropKey="precio"
       submitLabel="Reemplazar"
       onConfirm={handleConfirm}
+      textFilterKey="referencia"
     />
   );
 }
