@@ -315,6 +315,71 @@ function matchTextFilter(value: string | null | undefined, q: string): boolean {
   return (value ?? "").toLowerCase().includes(q.trim().toLowerCase());
 }
 
+function SortableHead({
+  label,
+  sortKey,
+  current,
+  dir,
+  onClick,
+  align = "left",
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onClick: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = current === sortKey;
+  return (
+    <TableHead className={cn(align === "right" && "text-right", "p-0")}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={cn(
+          "flex h-10 w-full items-center gap-1 px-2 text-xs font-medium transition-colors hover:text-foreground",
+          align === "right" ? "justify-end" : "justify-start",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        <span>{label}</span>
+        {active ? (
+          dir === "asc" ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )
+        ) : (
+          <ChevronsUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
+function FilterCell({
+  value,
+  onChange,
+  numeric = false,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  numeric?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <TableHead className="p-1">
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? (numeric ? ">0" : "Filtrar…")}
+        className={cn("h-7 px-2 text-xs", numeric && "text-right tabular-nums")}
+      />
+    </TableHead>
+  );
+}
+
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
