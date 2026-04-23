@@ -185,12 +185,13 @@ export function NegotiationEditor({
   };
 
   const validation = React.useMemo(() => {
-    const errors: Record<string, { qty?: boolean; price?: boolean }> = {};
+    const errors: Record<string, { qty?: boolean; price?: boolean; disc?: boolean }> = {};
     let hasInvalid = false;
     items.forEach((it) => {
       const qty = parseNum(it.cantidad);
       const price = parseNum(it.precio_unitario);
-      const e: { qty?: boolean; price?: boolean } = {};
+      const disc = parseNum(it.descuento_pct);
+      const e: { qty?: boolean; price?: boolean; disc?: boolean } = {};
       if (qty == null || qty <= 0) {
         e.qty = true;
         hasInvalid = true;
@@ -199,7 +200,11 @@ export function NegotiationEditor({
         e.price = true;
         hasInvalid = true;
       }
-      if (e.qty || e.price) errors[it.uid] = e;
+      if (disc == null || disc < 0 || disc > 100) {
+        e.disc = true;
+        hasInvalid = true;
+      }
+      if (e.qty || e.price || e.disc) errors[it.uid] = e;
     });
     const nameOk = name.trim().length > 0;
     const itemsOk = items.length > 0;
@@ -210,7 +215,9 @@ export function NegotiationEditor({
     return items.reduce((acc, it) => {
       const qty = parseNum(it.cantidad) ?? 0;
       const price = parseNum(it.precio_unitario) ?? 0;
-      return acc + qty * price;
+      const disc = parseNum(it.descuento_pct) ?? 0;
+      const sale = price * (1 - disc / 100);
+      return acc + qty * sale;
     }, 0);
   }, [items]);
 
@@ -226,12 +233,16 @@ export function NegotiationEditor({
       const itemRows = items.map((it) => {
         const qty = parseNum(it.cantidad)!;
         const price = parseNum(it.precio_unitario)!;
+        const disc = parseNum(it.descuento_pct) ?? 0;
+        const sale = price * (1 - disc / 100);
         return {
           referencia: it.referencia,
           descripcion: it.descripcion,
           cantidad: qty,
           precio_unitario: price,
-          subtotal: qty * price,
+          descuento_pct: disc,
+          precio_venta: sale,
+          subtotal: qty * sale,
           source_price_list_id: it.source_price_list_id,
         };
       });
