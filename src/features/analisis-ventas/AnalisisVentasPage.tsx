@@ -247,6 +247,20 @@ export function AnalisisVentasPage() {
   const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
   const [search, setSearch] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
+  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [colFilters, setColFilters] = React.useState<ColFilters>({
+    sale_date: "",
+    vendedor: "",
+    dependencia: "",
+    tercero: "",
+    referencia: "",
+    cantidad: "",
+    precio_unitario: "",
+    ctu: "",
+    margenU: "",
+    margenPct: "",
+  });
 
   const analytics = useSalesAnalytics({
     range: debouncedRange,
