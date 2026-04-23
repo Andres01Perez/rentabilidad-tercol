@@ -168,6 +168,7 @@ export function NegotiationEditor({
         descripcion: ref.descripcion,
         cantidad: "1",
         precio_unitario: suggested != null ? String(suggested) : "",
+        descuento_pct: "0",
         source_price_list_id: suggested != null ? sourceListId : null,
       },
     ]);
