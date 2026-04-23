@@ -42,6 +42,7 @@ type EditorItem = {
   descripcion: string | null;
   cantidad: string;
   precio_unitario: string;
+  descuento_pct: string;
   source_price_list_id: string | null;
 };
 
@@ -103,7 +104,9 @@ export function NegotiationEditor({
     setLoadingItems(true);
     void supabase
       .from("negotiation_items")
-      .select("id, referencia, descripcion, cantidad, precio_unitario, source_price_list_id")
+      .select(
+        "id, referencia, descripcion, cantidad, precio_unitario, descuento_pct, source_price_list_id",
+      )
       .eq("negotiation_id", negotiation.id)
       .order("created_at", { ascending: true })
       .then(({ data, error }) => {
@@ -113,12 +116,21 @@ export function NegotiationEditor({
           return;
         }
         setItems(
-          (data ?? []).map((r) => ({
+          (data ?? []).map((r: {
+            id: string;
+            referencia: string;
+            descripcion: string | null;
+            cantidad: number;
+            precio_unitario: number;
+            descuento_pct: number | null;
+            source_price_list_id: string | null;
+          }) => ({
             uid: r.id,
             referencia: r.referencia,
             descripcion: r.descripcion,
             cantidad: String(r.cantidad),
             precio_unitario: String(r.precio_unitario),
+            descuento_pct: String(r.descuento_pct ?? 0),
             source_price_list_id: r.source_price_list_id,
           })),
         );
