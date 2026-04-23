@@ -222,11 +222,22 @@ export async function parseExcelWithMapping<TKey extends string>(
   const rows: Record<TKey, string | number | null>[] = [];
   const warnings: string[] = [];
   let skipped = 0;
+  let totalsSkipped = 0;
 
   for (const r of dataRows) {
     // Skip fully-empty rows
     const allEmpty = r.every((c) => c === null || c === undefined || c === "");
     if (allEmpty) continue;
+
+    // Drop rows that look like "TOTAL"/"SUBTOTAL" labels in the configured text key.
+    if (options.textFilterKey !== undefined) {
+      const idx = resolved[options.textFilterKey];
+      if (idx !== undefined && isTotalLikeValue(r[idx])) {
+        totalsSkipped++;
+        skipped++;
+        continue;
+      }
+    }
 
     const out = {} as Record<TKey, string | number | null>;
     let hasRequired = true;
@@ -257,8 +268,12 @@ export async function parseExcelWithMapping<TKey extends string>(
     rows.push(out);
   }
 
-  if (skipped > 0) {
-    warnings.push(`${skipped} filas se descartaron por falta de datos requeridos o precio en cero.`);
+  if (totalsSkipped > 0) {
+    warnings.push(`${totalsSkipped} filas descartadas por ser totales o subtotales.`);
+  }
+  const otherSkipped = skipped - totalsSkipped;
+  if (otherSkipped > 0) {
+    warnings.push(`${otherSkipped} filas se descartaron por falta de datos requeridos o precio en cero.`);
   }
 
   return {
