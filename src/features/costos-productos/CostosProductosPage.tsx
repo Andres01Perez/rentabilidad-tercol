@@ -52,32 +52,40 @@ type ProductCost = {
   pct_cto: number | null;
 };
 
-const COLUMN_MAP = {
-  grupo: ["GRUPO", "Grupo"],
-  referencia: ["REFERENCIA", "REF", "Referencia"],
-  descripcion: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción"],
-  cant: ["CANT", "CANTIDAD"],
-  cumat: ["CUMAT", "CU MAT"],
-  cumo: ["CUMO", "CU MO"],
-  cunago: ["CUNAGO", "CU NAGO"],
-  ctmat: ["CTMAT", "CT MAT"],
-  ctmo: ["CTMO", "CT MO"],
-  ctsit: ["CTSIT", "CT SIT"],
-  pct_part: ["%PART", "% PART", "PORCENTAJE PART", "PCT PART"],
-  cifu: ["CIFU"],
-  mou: ["MOU"],
-  ctu: ["CTU"],
-  ct: ["CT"],
-  puv: ["PUV"],
-  preciotot: ["PRECIOTOT", "PRECIO TOT", "PRECIO TOTAL"],
-  pct_cto: ["%CTO", "% CTO", "PCT CTO"],
-} as const;
+type ColKey =
+  | "grupo" | "referencia" | "descripcion" | "cant"
+  | "cumat" | "cumo" | "cunago" | "ctmat" | "ctmo" | "ctsit"
+  | "pct_part" | "cifu" | "mou" | "ctu" | "ct" | "puv" | "preciotot" | "pct_cto";
 
-type ColKey = keyof typeof COLUMN_MAP;
-
-const NUMERIC_KEYS: readonly ColKey[] = [
+const NUMERIC_KEYS: ColKey[] = [
   "cant", "cumat", "cumo", "cunago", "ctmat", "ctmo", "ctsit",
   "pct_part", "cifu", "mou", "ctu", "ct", "puv", "preciotot", "pct_cto",
+];
+
+const WIZARD_FIELDS: WizardField<ColKey>[] = [
+  { key: "referencia", label: "Referencia", required: true,
+    suggestedAliases: ["REFERENCIA", "REF", "Referencia", "CODIGO", "Código", "COD"] },
+  { key: "ctu", label: "CTU (Costo Total Unitario)", required: true,
+    suggestedAliases: ["CTU", "CT U", "COSTO TOTAL UNITARIO", "Costo total unitario", "COSTO UNITARIO"] },
+  { key: "grupo", label: "Grupo", suggestedAliases: ["GRUPO", "Grupo", "FAMILIA", "CATEGORIA", "Categoría"] },
+  { key: "descripcion", label: "Descripción",
+    suggestedAliases: ["DESCRIPCION", "DESCRIPCIÓN", "Descripción", "NOMBRE", "PRODUCTO"] },
+  { key: "cant", label: "Cantidad", suggestedAliases: ["CANT", "CANTIDAD"] },
+  { key: "cumat", label: "CUMAT", suggestedAliases: ["CUMAT", "CU MAT"] },
+  { key: "cumo", label: "CUMO", suggestedAliases: ["CUMO", "CU MO"] },
+  { key: "cunago", label: "CUNAGO", suggestedAliases: ["CUNAGO", "CU NAGO"] },
+  { key: "ctmat", label: "CTMAT", suggestedAliases: ["CTMAT", "CT MAT"] },
+  { key: "ctmo", label: "CTMO", suggestedAliases: ["CTMO", "CT MO"] },
+  { key: "ctsit", label: "CTSIT", suggestedAliases: ["CTSIT", "CT SIT"] },
+  { key: "pct_part", label: "% Participación",
+    suggestedAliases: ["%PART", "% PART", "PORCENTAJE PART", "PCT PART"] },
+  { key: "cifu", label: "CIFU", suggestedAliases: ["CIFU"] },
+  { key: "mou", label: "MOU", suggestedAliases: ["MOU"] },
+  { key: "ct", label: "CT (Costo Total)", suggestedAliases: ["CT", "COSTO TOTAL"] },
+  { key: "puv", label: "PUV", suggestedAliases: ["PUV"] },
+  { key: "preciotot", label: "Precio Total",
+    suggestedAliases: ["PRECIOTOT", "PRECIO TOT", "PRECIO TOTAL"] },
+  { key: "pct_cto", label: "% Costo", suggestedAliases: ["%CTO", "% CTO", "PCT CTO"] },
 ];
 
 const COLUMNS: { key: keyof ProductCost; label: string; numeric?: boolean }[] = [
