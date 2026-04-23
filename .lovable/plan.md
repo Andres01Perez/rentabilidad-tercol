@@ -1,127 +1,89 @@
 
 
-# Plan: nueva sección "Negociaciones" (rename de Negocios fijos) con cotizador
+# Plan: ajustes al editor de negociaciones (referencia limpia + tipografía + descuento %)
 
-## Resumen
+Tres cambios coordinados sobre `NegotiationEditor.tsx`, una migración de BD para persistir el descuento, y un pequeño ajuste de tipografía.
 
-Convertir la página actual de placeholder en un **cotizador funcional** donde el usuario crea negociaciones (tipo cotización), agrega referencias del catálogo (unión de costos + listas de precios), define cantidad y precio, y guarda todo en BD. CRUD completo: crear, leer, editar, borrar.
+## 1. Listado de búsqueda: solo código de referencia
 
-## 1. Renombre global: `negocios-fijos` → `negociaciones`
+En el dropdown de sugerencias (`NegotiationEditor.tsx`, sección "Search + suggestions"):
 
-Cambios en estos archivos:
+- Eliminar el `<span>` que muestra `r.descripcion`.
+- Dejar únicamente el código `r.referencia`, alineado a la izquierda, con tipografía Montserrat bold (no monospace).
+- El hook `useReferenceSearch` se mantiene tal cual — sigue trayendo descripción por si la necesitamos en la fila después de añadir.
 
-- **Ruta**: renombrar `src/routes/_app/negocios-fijos.tsx` → `src/routes/_app/negociaciones.tsx`. El `createFileRoute` pasa a `"/_app/negociaciones"`.
-- **Sidebar** (`src/components/layout/AppSidebar.tsx`): item `Negocios fijos` → `Negociaciones`, `to: "/negociaciones"`.
-- **Layout** (`src/routes/_app.tsx`): `ROUTE_LABELS["/negociaciones"] = "Negociaciones"` (eliminar la entrada vieja).
-- **`routeTree.gen.ts`**: regenerado automáticamente por el plugin de Vite, no se toca a mano.
+## 2. Tipografía Montserrat bold para el código de referencia
 
-No hay nombre de tabla en BD que renombrar (la tabla aún no existe).
+Hoy el código se ve "diferente" porque usa `font-mono` (fuente monoespaciada del sistema). Cambios:
 
-## 2. Cambios de base de datos (migración nueva)
+- **En el dropdown de sugerencias**: reemplazar `font-mono text-xs text-muted-foreground` por `font-sans font-bold text-sm text-foreground`. Montserrat ya es la fuente sans del proyecto (ver `--font-sans` en `styles.css` línea 68).
+- **En la celda Ref de la tabla de items**: reemplazar `font-mono text-xs` por `font-bold text-sm`.
 
-Dos tablas nuevas:
+Resultado: el código de referencia se ve consistente con el resto de la UI, en Montserrat bold.
 
-### `negotiations`
-- `id` uuid PK
-- `name` text NOT NULL (ej. "Negociación FM")
-- `notes` text NULL (observaciones)
-- `total` numeric NOT NULL DEFAULT 0 (suma de cantidad × precio, calculado en cliente al guardar)
-- `items_count` int NOT NULL DEFAULT 0
-- `created_by_id` uuid, `created_by_name` text NOT NULL
-- `updated_by_id` uuid, `updated_by_name` text
-- `created_at`, `updated_at` timestamptz con trigger `set_updated_at` existente
+## 3. Campo de descuento (%) por ítem
 
-### `negotiation_items`
-- `id` uuid PK
-- `negotiation_id` uuid NOT NULL → FK con `ON DELETE CASCADE`
-- `referencia` text NOT NULL
-- `descripcion` text NULL (snapshot al momento de añadir)
-- `cantidad` numeric NOT NULL CHECK > 0
-- `precio_unitario` numeric NOT NULL CHECK >= 0
-- `subtotal` numeric NOT NULL (cantidad × precio, persistido)
-- `source_price_list_id` uuid NULL (de qué lista vino el precio sugerido, si aplica)
-- `created_at` timestamptz
+### Cambio de BD (migración nueva)
 
-RLS: mismo patrón que las demás tablas del proyecto (políticas open select/insert/update/delete para `anon, authenticated`). Trigger `set_updated_at` solo en `negotiations`.
+Añadir dos columnas a `negotiation_items`:
+- `descuento_pct` numeric NOT NULL DEFAULT 0 (porcentaje 0–100)
+- `precio_venta` numeric NOT NULL DEFAULT 0 (= `precio_unitario * (1 - descuento_pct/100)`, persistido para auditoría histórica y reportes)
 
-## 3. Catálogo maestro de referencias (vista SQL)
+`subtotal` pasa a calcularse como `cantidad * precio_venta` (no `precio_unitario`). El total de la negociación sigue siendo la suma de subtotales — sin cambios estructurales en `negotiations`.
 
-Crear vista `master_references` que une referencias distintas de `product_costs` y `price_list_items`:
+### Cambios en el editor
 
-```sql
-CREATE OR REPLACE VIEW master_references AS
-SELECT referencia, MAX(descripcion) AS descripcion
-FROM (
-  SELECT referencia, descripcion FROM product_costs
-  UNION ALL
-  SELECT referencia, descripcion FROM price_list_items
-) t
-WHERE referencia IS NOT NULL AND TRIM(referencia) <> ''
-GROUP BY referencia;
+- Añadir nueva columna **Desc. %** entre "Precio unit." y "Subtotal":
+  - Input numérico, min 0, max 100, default 0.
+  - Validación: si está fuera de [0, 100] se marca en rojo y bloquea guardar.
+- Añadir columna calculada (read-only) **Precio venta** que muestra `precio_unitario * (1 - desc/100)`.
+- **Subtotal** pasa a calcularse como `cantidad * precio_venta` (en lugar de `cantidad * precio_unitario`).
+- El total del footer se recalcula automáticamente con la nueva fórmula.
+
+### Layout de la tabla resultante
+
+```text
+Ref | Descripción | Cantidad | Precio unit. | Desc % | Precio venta | Subtotal | ✕
 ```
 
-Así al hacer typeahead se consulta una sola fuente. Si en el futuro se crea tabla maestra dedicada, solo se reemplaza la vista.
-
-## 4. UI de la página `/negociaciones`
-
-### Vista principal (lista CRUD)
-
-Tabla glass tipo `ListasPreciosPage`:
-- Columnas: Nombre · # Items · Total · Creada por · Última actualización · Actualizada por · Acciones (Ver/Editar, Eliminar)
-- Header con botón **"Nueva negociación"** (gradiente brand).
-- AlertDialog de confirmación para eliminar (cascada borra items).
-
-### Editor de negociación (Sheet o Dialog grande)
-
-Se abre tanto al crear como al editar. Layout:
-
-**Encabezado del formulario**
-- Input "Nombre de la negociación" (requerido).
-- Textarea "Notas / observaciones" (opcional).
-- Selector "Lista de precios sugerida" (opcional, dropdown de `price_lists`). Cuando se cambia, las refs ya añadidas no se tocan; solo afecta el precio sugerido al añadir nuevas refs.
-
-**Buscador de referencias (typeahead)**
-- Input con debounce que consulta `master_references` por `referencia` o `descripcion` (ILIKE %q%, limit 20).
-- Al seleccionar una sugerencia → se añade fila a la tabla de items con cantidad=1, precio prellenado desde la lista seleccionada (si existe match en `price_list_items` para esa lista + ref) o vacío.
-
-**Tabla de items editables**
-- Columnas: Ref (read-only), Descripción (read-only), **Cantidad** (input numérico, requerido > 0), **Precio unit.** (input numérico, requerido >= 0), Subtotal (calculado), Acción (botón eliminar fila).
-- Footer con "Total: $X" en grande.
-
-**Validación previa al guardar**
-- Nombre no vacío.
-- Al menos 1 item.
-- Todos los items con cantidad > 0 y precio >= 0 (precio = 0 sí se permite, pero campo no puede estar vacío).
-- Si falla validación, se marcan en rojo las celdas inválidas y toast de error. Botón Guardar deshabilitado mientras haya inválidos.
-
-**Botones**: Cancelar · Guardar negociación.
+Para que quepa cómodamente en el Sheet de 3xl, ajusto anchos:
+- Ref: w-[14%], Cantidad/Desc: w-[80px], Precio unit./Precio venta/Subtotal: w-[110px].
+- En viewport actual (1277px) cabe sin scroll horizontal; si se aprieta, las columnas numéricas comparten espacio bien.
 
 ### Persistencia
-- **Crear**: insert en `negotiations` → obtener `id` → bulk insert en `negotiation_items` con `chunkedInsert`. Update final del total/items_count.
-- **Editar**: update de `negotiations`, delete de items existentes, re-insert de items nuevos (más simple que diffear). Actualiza `updated_by_*`.
-- **Eliminar**: delete en `negotiations` (cascade).
 
-## 5. Archivos a tocar/crear
+- Al guardar (crear y editar): cada `itemRow` incluye `descuento_pct` y `precio_venta` calculado, y el `subtotal` ya viene de `cantidad * precio_venta`.
+- Al cargar items existentes: leer también `descuento_pct` y rellenar el input. Items antiguos (pre-migración) tendrán `descuento_pct = 0` por DEFAULT, así que el comportamiento histórico se preserva exactamente.
 
-**Crear**
-- `supabase/migrations/<timestamp>_negotiations.sql` (tablas + RLS + trigger + vista master_references).
-- `src/routes/_app/negociaciones.tsx` (route file nuevo).
-- `src/features/negociaciones/NegociacionesPage.tsx` (lista CRUD).
-- `src/features/negociaciones/NegotiationEditor.tsx` (Sheet con form + buscador + tabla items).
-- `src/features/negociaciones/useReferenceSearch.ts` (hook typeahead contra `master_references`).
+### Tipo `EditorItem`
+
+Añadir campo `descuento_pct: string` (string para input controlado, igual que cantidad y precio).
+
+## 4. Archivos afectados
+
+**Migración nueva** (BD)
+- `supabase/migrations/<timestamp>_negotiation_items_discount.sql`:
+  - `ALTER TABLE negotiation_items ADD COLUMN descuento_pct numeric NOT NULL DEFAULT 0;`
+  - `ALTER TABLE negotiation_items ADD COLUMN precio_venta numeric NOT NULL DEFAULT 0;`
+  - `UPDATE negotiation_items SET precio_venta = precio_unitario WHERE precio_venta = 0;` (backfill para items existentes)
 
 **Modificar**
-- `src/components/layout/AppSidebar.tsx` (rename label + ruta).
-- `src/routes/_app.tsx` (actualizar `ROUTE_LABELS`).
+- `src/features/negociaciones/NegotiationEditor.tsx`:
+  - Quitar descripción del dropdown de búsqueda; aplicar Montserrat bold al código.
+  - Aplicar Montserrat bold a la celda Ref de la tabla.
+  - Añadir columna Desc. % y Precio venta; recalcular subtotal y total con descuento.
+  - Persistir `descuento_pct` y `precio_venta` en insert/update.
+  - Cargar `descuento_pct` al editar.
 
-**Eliminar**
-- `src/routes/_app/negocios-fijos.tsx`.
+**Sin cambios**
+- `NegociacionesPage.tsx`: el total a nivel de negociación sigue siendo la suma de subtotales — no necesita tocar nada (lo recalcula el editor antes de guardar).
+- `useReferenceSearch.ts`: se mantiene; aunque la descripción ya no se muestre en el dropdown, sigue siendo útil para guardar como snapshot al añadir el ítem.
 
-## 6. Resultado esperado
+## 5. Resultado esperado
 
-- Sidebar muestra "Negociaciones" en lugar de "Negocios fijos", apunta a `/negociaciones`.
-- El usuario puede: crear una negociación con nombre, opcionalmente seleccionar una lista de precios base, buscar referencias del catálogo (todas las que existan en costos o listas), añadirlas con cantidad y precio (precio sugerido si hay lista, editable siempre), ver subtotales y total, guardar.
-- Cantidad y precio son obligatorios; sin ellos no se puede guardar.
-- La negociación queda en BD con todos sus items, y se puede ver, editar, eliminar desde la tabla principal.
-- Listo para futuras vistas de rentabilidad (cruce con `product_costs` por `referencia`).
+- Dropdown de búsqueda muestra solo el código de referencia, en Montserrat bold, fácil de leer.
+- En la tabla de items la columna Ref usa la misma tipografía consistente.
+- Cada ítem tiene un nuevo campo "Desc %" editable. El precio de venta y el subtotal se actualizan en vivo a medida que el usuario escribe descuento.
+- El descuento queda guardado en BD junto con el precio de venta efectivo, listo para futuras vistas de rentabilidad.
+- Items existentes funcionan sin cambios visibles (descuento = 0%).
 
