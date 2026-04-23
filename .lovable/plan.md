@@ -1,89 +1,113 @@
+## Plan: tabla "Detalle de ventas" expandida + ordenamiento + filtros por columna
 
+Tres mejoras coordinadas sobre la tabla detalle al final de `/analisis-ventas`:
+1. **Más alta**: aprovechar mejor el espacio vertical.
+2. **Ordenamiento por columna**: clic en cabecera para ordenar asc/desc.
+3. **Filtros por columna**: caja de búsqueda específica por columna (texto y rangos numéricos) además del buscador global ya existente.
 
-# Plan: ajustes al editor de negociaciones (referencia limpia + tipografía + descuento %)
+Todo se implementa **dentro de `AnalisisVentasPage.tsx`** sin cambios a `useSalesAnalytics.ts` ni a la BD.
 
-Tres cambios coordinados sobre `NegotiationEditor.tsx`, una migración de BD para persistir el descuento, y un pequeño ajuste de tipografía.
+---
 
-## 1. Listado de búsqueda: solo código de referencia
+### 1. Altura de la tabla
 
-En el dropdown de sugerencias (`NegotiationEditor.tsx`, sección "Search + suggestions"):
+Hoy el contenedor es `max-h-[500px]`. Cambio a una altura responsive: `max-h-[calc(100vh-200px)] min-h-[600px]`. Mucho más alta en pantallas grandes y mínimo cómodo en pequeñas. El `overflow-auto` se conserva y los headers `sticky top-0` siguen visibles al hacer scroll.
 
-- Eliminar el `<span>` que muestra `r.descripcion`.
-- Dejar únicamente el código `r.referencia`, alineado a la izquierda, con tipografía Montserrat bold (no monospace).
-- El hook `useReferenceSearch` se mantiene tal cual — sigue trayendo descripción por si la necesitamos en la fila después de añadir.
+Bonus: subo el límite de filas mostradas de **500 a 2000** para aprovechar la nueva altura.
 
-## 2. Tipografía Montserrat bold para el código de referencia
+---
 
-Hoy el código se ve "diferente" porque usa `font-mono` (fuente monoespaciada del sistema). Cambios:
+### 2. Ordenamiento por columna
 
-- **En el dropdown de sugerencias**: reemplazar `font-mono text-xs text-muted-foreground` por `font-sans font-bold text-sm text-foreground`. Montserrat ya es la fuente sans del proyecto (ver `--font-sans` en `styles.css` línea 68).
-- **En la celda Ref de la tabla de items**: reemplazar `font-mono text-xs` por `font-bold text-sm`.
+Estado nuevo:
 
-Resultado: el código de referencia se ve consistente con el resto de la UI, en Montserrat bold.
-
-## 3. Campo de descuento (%) por ítem
-
-### Cambio de BD (migración nueva)
-
-Añadir dos columnas a `negotiation_items`:
-- `descuento_pct` numeric NOT NULL DEFAULT 0 (porcentaje 0–100)
-- `precio_venta` numeric NOT NULL DEFAULT 0 (= `precio_unitario * (1 - descuento_pct/100)`, persistido para auditoría histórica y reportes)
-
-`subtotal` pasa a calcularse como `cantidad * precio_venta` (no `precio_unitario`). El total de la negociación sigue siendo la suma de subtotales — sin cambios estructurales en `negotiations`.
-
-### Cambios en el editor
-
-- Añadir nueva columna **Desc. %** entre "Precio unit." y "Subtotal":
-  - Input numérico, min 0, max 100, default 0.
-  - Validación: si está fuera de [0, 100] se marca en rojo y bloquea guardar.
-- Añadir columna calculada (read-only) **Precio venta** que muestra `precio_unitario * (1 - desc/100)`.
-- **Subtotal** pasa a calcularse como `cantidad * precio_venta` (en lugar de `cantidad * precio_unitario`).
-- El total del footer se recalcula automáticamente con la nueva fórmula.
-
-### Layout de la tabla resultante
-
-```text
-Ref | Descripción | Cantidad | Precio unit. | Desc % | Precio venta | Subtotal | ✕
+```ts
+type SortKey = "sale_date" | "vendedor" | "dependencia" | "tercero"
+             | "referencia" | "cantidad" | "precio_unitario"
+             | "ctu" | "margenU" | "margenPct";
+type SortDir = "asc" | "desc";
+const [sortKey, setSortKey] = useState<SortKey>("sale_date");
+const [sortDir, setSortDir] = useState<SortDir>("desc");
 ```
 
-Para que quepa cómodamente en el Sheet de 3xl, ajusto anchos:
-- Ref: w-[14%], Cantidad/Desc: w-[80px], Precio unit./Precio venta/Subtotal: w-[110px].
-- En viewport actual (1277px) cabe sin scroll horizontal; si se aprieta, las columnas numéricas comparten espacio bien.
+Cada `<TableHead>` se vuelve clickeable:
+- Clic en columna nueva → `sortDir = "asc"`.
+- Clic en la columna activa → alterna `asc` ↔ `desc`.
+- Indicador: ícono `ChevronUp`/`ChevronDown` cuando está activa; `ChevronsUpDown` tenue cuando no.
 
-### Persistencia
+`detailRows` se extiende para aplicar el sort tras los filtros:
+- Numérico: `cantidad`, `precio_unitario`, `ctu`, `margenU` (`precio_unitario - ctu`), `margenPct`.
+- Texto: `vendedor`, `dependencia`, `tercero`, `referencia` (con `localeCompare`).
+- Fecha: `sale_date` (string ISO, comparación lexicográfica).
 
-- Al guardar (crear y editar): cada `itemRow` incluye `descuento_pct` y `precio_venta` calculado, y el `subtotal` ya viene de `cantidad * precio_venta`.
-- Al cargar items existentes: leer también `descuento_pct` y rellenar el input. Items antiguos (pre-migración) tendrán `descuento_pct = 0` por DEFAULT, así que el comportamiento histórico se preserva exactamente.
+Nulos siempre al final, sin importar dirección.
 
-### Tipo `EditorItem`
+---
 
-Añadir campo `descuento_pct: string` (string para input controlado, igual que cantidad y precio).
+### 3. Filtros por columna
 
-## 4. Archivos afectados
+Mantengo el buscador global existente y agrego una **fila de filtros bajo el header**, con un input compacto por columna:
 
-**Migración nueva** (BD)
-- `supabase/migrations/<timestamp>_negotiation_items_discount.sql`:
-  - `ALTER TABLE negotiation_items ADD COLUMN descuento_pct numeric NOT NULL DEFAULT 0;`
-  - `ALTER TABLE negotiation_items ADD COLUMN precio_venta numeric NOT NULL DEFAULT 0;`
-  - `UPDATE negotiation_items SET precio_venta = precio_unitario WHERE precio_venta = 0;` (backfill para items existentes)
+```text
+| Fecha | Vendedor | Dependencia | Tercero | Ref | Cant | PUV | CTU | Mar U. | Mar % |  ← header (sortable)
+| [≥]   | [text]   | [text]      | [text]  |[txt]| [≥]  | [≥] | [≥] |  [≥]   |  [≥]  |  ← filter inputs
+```
 
-**Modificar**
-- `src/features/negociaciones/NegotiationEditor.tsx`:
-  - Quitar descripción del dropdown de búsqueda; aplicar Montserrat bold al código.
-  - Aplicar Montserrat bold a la celda Ref de la tabla.
-  - Añadir columna Desc. % y Precio venta; recalcular subtotal y total con descuento.
-  - Persistir `descuento_pct` y `precio_venta` en insert/update.
-  - Cargar `descuento_pct` al editar.
+Estado:
 
-**Sin cambios**
-- `NegociacionesPage.tsx`: el total a nivel de negociación sigue siendo la suma de subtotales — no necesita tocar nada (lo recalcula el editor antes de guardar).
-- `useReferenceSearch.ts`: se mantiene; aunque la descripción ya no se muestre en el dropdown, sigue siendo útil para guardar como snapshot al añadir el ítem.
+```ts
+const [colFilters, setColFilters] = useState({
+  sale_date: "", vendedor: "", dependencia: "", tercero: "", referencia: "",
+  cantidad: "", precio_unitario: "", ctu: "", margenU: "", margenPct: "",
+});
+```
 
-## 5. Resultado esperado
+**Sintaxis numérica** (parser pequeño y predecible):
+- `100` → exacto (tolerancia ±0.5)
+- `>100`, `>=100`, `<100`, `<=100` → comparación
+- `10-100` → rango inclusivo
+- vacío o inválido → sin filtro
+- Limpia separadores de miles y acepta `,` como decimal.
 
-- Dropdown de búsqueda muestra solo el código de referencia, en Montserrat bold, fácil de leer.
-- En la tabla de items la columna Ref usa la misma tipografía consistente.
-- Cada ítem tiene un nuevo campo "Desc %" editable. El precio de venta y el subtotal se actualizan en vivo a medida que el usuario escribe descuento.
-- El descuento queda guardado en BD junto con el precio de venta efectivo, listo para futuras vistas de rentabilidad.
-- Items existentes funcionan sin cambios visibles (descuento = 0%).
+**UI**:
+- Inputs compactos (`h-7 text-xs`).
+- Placeholder: texto = `"Filtrar…"`, numérico = `">0"`.
+- Botón **"Limpiar filtros"** a la derecha del header de la tabla cuando hay al menos un filtro activo (incluye el buscador global). Resetea todo.
 
+**Combinación**: AND entre columnas + AND con el buscador global. Pipeline en `useMemo`:
+
+```text
+analytics.filteredRows  →  buscador global  →  filtros por columna  →  sort  →  slice(0, 2000)
+```
+
+---
+
+### 4. Pequeños ajustes UI
+
+- Contador: `"Mostrando X de Y líneas"` ya está; añado `(filtradas: Z)` cuando hay filtros por columna activos.
+- Header de la sección: `flex flex-wrap items-center justify-between gap-3` para acomodar el botón "Limpiar filtros" sin romper en mobile.
+- Cabeceras clickeables: `cursor-pointer select-none hover:text-foreground transition-colors` con `gap-1`.
+
+---
+
+### 5. Archivos afectados
+
+**Único archivo modificado**: `src/features/analisis-ventas/AnalisisVentasPage.tsx`
+- Nuevos imports de `lucide-react`: `ChevronUp`, `ChevronDown`, `ChevronsUpDown`.
+- Estado: `sortKey`, `sortDir`, `colFilters`.
+- Helpers locales: `parseNumFilter` y `matchNumFilter`.
+- `detailRows` extendido (filtros por columna → sort → slice 2000).
+- JSX de la tabla: cabeceras como botones, fila de filtros, botón "Limpiar filtros", contenedor con altura nueva.
+
+**Sin cambios**: `useSalesAnalytics.ts`, BD, otros componentes.
+
+---
+
+### 6. Resultado esperado
+
+- Tabla ocupa ~70-80% del viewport en alto, mostrando muchas más filas sin scroll del navegador.
+- Cada cabecera ordena al hacer clic (asc → desc), con indicador visual.
+- Bajo cada cabecera hay un input de filtro: texto o numérico (`>100`, `<50`, `10-100`, `100`).
+- Filtros se combinan en AND con el buscador global.
+- Botón "Limpiar filtros" resetea todo cuando hay filtros activos.
+- Hasta 2000 filas mostradas (vs 500 anterior).
