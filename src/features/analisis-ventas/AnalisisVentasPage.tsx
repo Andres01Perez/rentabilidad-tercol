@@ -274,7 +274,7 @@ export function AnalisisVentasPage() {
     typeof v === "number" ? formatCurrency(v) : String(v ?? "");
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-8 px-6 py-10 lg:px-10">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
       <PageHeader
         icon={TrendingUp}
         eyebrow="Análisis"
