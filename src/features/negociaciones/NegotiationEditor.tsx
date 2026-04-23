@@ -438,11 +438,13 @@ export function NegotiationEditor({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[18%]">Ref</TableHead>
+                    <TableHead className="w-[14%]">Ref</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead className="w-[100px] text-right">Cantidad</TableHead>
-                    <TableHead className="w-[130px] text-right">Precio unit.</TableHead>
-                    <TableHead className="w-[120px] text-right">Subtotal</TableHead>
+                    <TableHead className="w-[80px] text-right">Cantidad</TableHead>
+                    <TableHead className="w-[110px] text-right">Precio unit.</TableHead>
+                    <TableHead className="w-[80px] text-right">Desc %</TableHead>
+                    <TableHead className="w-[110px] text-right">Precio venta</TableHead>
+                    <TableHead className="w-[110px] text-right">Subtotal</TableHead>
                     <TableHead className="w-[1%]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -451,9 +453,11 @@ export function NegotiationEditor({
                     const err = validation.errors[it.uid];
                     const qty = parseNum(it.cantidad) ?? 0;
                     const price = parseNum(it.precio_unitario) ?? 0;
+                    const disc = parseNum(it.descuento_pct) ?? 0;
+                    const sale = price * (1 - disc / 100);
                     return (
                       <TableRow key={it.uid}>
-                        <TableCell className="font-mono text-xs">{it.referencia}</TableCell>
+                        <TableCell className="text-sm font-bold">{it.referencia}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {it.descripcion ?? "—"}
                         </TableCell>
@@ -485,8 +489,27 @@ export function NegotiationEditor({
                             )}
                           />
                         </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={100}
+                            value={it.descuento_pct}
+                            onChange={(e) =>
+                              updateItem(it.uid, { descuento_pct: e.target.value })
+                            }
+                            className={cn(
+                              "h-8 text-right tabular-nums",
+                              err?.disc && "border-destructive focus-visible:ring-destructive",
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+                          {formatCurrency(sale)}
+                        </TableCell>
                         <TableCell className="text-right text-xs tabular-nums font-medium">
-                          {formatCurrency(qty * price)}
+                          {formatCurrency(qty * sale)}
                         </TableCell>
                         <TableCell>
                           <Button
