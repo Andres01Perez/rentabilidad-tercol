@@ -339,43 +339,15 @@ function ReplaceListDialog({
   userId: string;
   userName: string;
 }) {
-  const [file, setFile] = React.useState<File | null>(null);
-  const [parsing, setParsing] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [confirm, setConfirm] = React.useState(false);
-  const [preview, setPreview] = React.useState<{
-    rows: Record<ColKey, string | number | null>[];
-    warnings: string[];
-  } | null>(null);
-
-  React.useEffect(() => {
-    if (!file) {
-      setPreview(null);
-      return;
-    }
-    setParsing(true);
-    parseExcel(file, COLUMN_MAP, {
-      requiredKeys: ["referencia"],
-      numericKeys: ["precio"],
-    })
-      .then((res) => setPreview({ rows: res.rows as Record<ColKey, string | number | null>[], warnings: res.warnings }))
-      .catch((e: Error) => {
-        toast.error(e.message);
-        setFile(null);
-      })
-      .finally(() => setParsing(false));
-  }, [file]);
-
-  const handleReplace = async () => {
-    if (!preview) return;
-    setSubmitting(true);
+  const handleConfirm = async (rows: Record<ColKey, string | number | null>[]) => {
+    if (rows.length === 0) return false;
     try {
       const { error: delErr } = await supabase
         .from("price_list_items")
         .delete()
         .eq("price_list_id", list.id);
       if (delErr) throw delErr;
-      const items = preview.rows.map((r) => ({
+      const items = rows.map((r) => ({
         price_list_id: list.id,
         referencia: String(r.referencia),
         descripcion: r.descripcion ? String(r.descripcion) : null,
@@ -393,108 +365,26 @@ function ReplaceListDialog({
       if (updErr) throw updErr;
       toast.success(`Lista actualizada con ${items.length} items`);
       onDone();
+      return true;
     } catch (e) {
       console.error(e);
       toast.error("Error al reemplazar la lista");
-    } finally {
-      setSubmitting(false);
-      setConfirm(false);
+      return false;
     }
   };
 
   return (
-    <>
-      <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Reemplazar Excel — {list.name}</DialogTitle>
-            <DialogDescription>
-              Las {list.items_count} filas actuales se reemplazarán por las del nuevo archivo.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Dropzone file={file} onFile={setFile} />
-            {parsing && (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Procesando Excel…
-              </p>
-            )}
-            {preview && <PreviewTable preview={preview} />}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => setConfirm(true)}
-              disabled={!preview || preview.rows.length === 0 || submitting}
-              className="bg-gradient-brand text-white"
-            >
-              Reemplazar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={confirm} onOpenChange={setConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar reemplazo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esto borrará las {list.items_count} filas actuales e insertará {preview?.rows.length ?? 0} nuevas. ¿Continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={submitting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReplace} disabled={submitting}>
-              {submitting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Sí, reemplazar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-function PreviewTable({
-  preview,
-}: {
-  preview: { rows: Record<ColKey, string | number | null>[]; warnings: string[] };
-}) {
-  const sample = preview.rows.slice(0, 5);
-  return (
-    <div className="rounded-xl border border-border/60 bg-white/60 p-3 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="font-semibold">Vista previa · {preview.rows.length} filas detectadas</span>
-      </div>
-      {preview.warnings.map((w, i) => (
-        <p key={i} className="mb-1 text-xs text-muted-foreground">⚠ {w}</p>
-      ))}
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs">Referencia</TableHead>
-              <TableHead className="text-xs">Descripción</TableHead>
-              <TableHead className="text-xs">Unidad</TableHead>
-              <TableHead className="text-right text-xs">Precio</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sample.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell className="text-xs">{r.referencia}</TableCell>
-                <TableCell className="text-xs">{r.descripcion ?? "—"}</TableCell>
-                <TableCell className="text-xs">{r.unidad_empaque ?? "—"}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">
-                  {typeof r.precio === "number" ? formatCurrency(r.precio) : "—"}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+    <ImportWizardDialog<ColKey>
+      open
+      onClose={onClose}
+      title={`Reemplazar Excel — ${list.name}`}
+      description={`Las ${list.items_count} filas actuales se reemplazarán por las del nuevo archivo.`}
+      fields={WIZARD_FIELDS}
+      numericKeys={["precio"]}
+      zeroDropKey="precio"
+      submitLabel="Reemplazar"
+      onConfirm={handleConfirm}
+    />
   );
 }
 
