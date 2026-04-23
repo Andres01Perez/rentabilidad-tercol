@@ -155,6 +155,32 @@ export interface MappingOptions<TKey extends string> {
   numericKeys?: TKey[];
   /** Drop rows whose numeric required value parses to 0. */
   dropZeroForKey?: TKey;
+  /** Key whose text value identifies the row code; used to drop "TOTAL"/"SUBTOTAL" rows. */
+  textFilterKey?: TKey;
+}
+
+/** Detect labels like "TOTAL", "Subtotal", "TOTAL GENERAL", or junk-looking codes. */
+function isTotalLikeValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  const raw = String(v).trim();
+  if (raw === "") return false;
+  if (raw.length > 50) return true;
+  const norm = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/^[0\-\s]+$/.test(norm)) return true;
+  const patterns = [
+    /^total\b/,
+    /\bsubtotal\b/,
+    /^suma\b/,
+    /^totales\b/,
+    /^gran total\b/,
+    /^total general\b/,
+  ];
+  return patterns.some((p) => p.test(norm));
 }
 
 export async function parseExcelWithMapping<TKey extends string>(
