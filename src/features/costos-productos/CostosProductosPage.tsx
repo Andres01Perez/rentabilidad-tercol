@@ -8,14 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonthSelect } from "@/components/period/MonthSelect";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -33,8 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Dropzone } from "@/components/excel/Dropzone";
-import { parseExcel, chunkedInsert } from "@/lib/excel";
+import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
+import { chunkedInsert } from "@/lib/excel";
 import { currentMonthDate, formatMonth, formatNumber } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
