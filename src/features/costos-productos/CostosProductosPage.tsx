@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Package, Upload, Loader2, Search } from "lucide-react";
+import { Package, Upload, Loader2, Search, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
