@@ -150,14 +150,14 @@ export function NativeLineChart({
       <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
         {series.map((item) => (
           <div key={item.key} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: `hsl(var(${item.colorVar}))` }} />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(${item.colorVar})` }} />
             <span>{item.label}</span>
           </div>
         ))}
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-72 w-full overflow-visible rounded-xl bg-muted/20">
-        <line x1={padding} x2={padding} y1={padding} y2={height - padding} stroke="hsl(var(--border))" strokeWidth="1" />
-        <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="hsl(var(--border))" strokeWidth="1" />
+        <line x1={padding} x2={padding} y1={padding} y2={height - padding} stroke="var(--border)" strokeWidth="1" />
+        <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="var(--border)" strokeWidth="1" />
         {series.map((item) => {
           const points = data
             .map((row, index) => `${getX(index)},${getY(row.values[item.key] ?? 0)}`)
@@ -166,7 +166,7 @@ export function NativeLineChart({
             <polyline
               key={item.key}
               fill="none"
-              stroke={`hsl(var(${item.colorVar}))`}
+              stroke={`var(${item.colorVar})`}
               strokeWidth="3"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -181,7 +181,7 @@ export function NativeLineChart({
               y={height - 4}
               fontSize="10"
               textAnchor="middle"
-              fill="hsl(var(--muted-foreground))"
+              fill="var(--muted-foreground)"
             >
               {row.label}
             </text>
@@ -225,18 +225,18 @@ export function NativeScatterChart({
   return (
     <div className="space-y-3">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-72 w-full rounded-xl bg-muted/20">
-        <line x1={padding} x2={padding} y1={padding} y2={height - padding} stroke="hsl(var(--border))" strokeWidth="1" />
-        <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="hsl(var(--border))" strokeWidth="1" />
+        <line x1={padding} x2={padding} y1={padding} y2={height - padding} stroke="var(--border)" strokeWidth="1" />
+        <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="var(--border)" strokeWidth="1" />
         {data.map((item) => (
           <g key={`${item.label}-${item.x}-${item.y}`}>
-            <circle cx={xAt(item.x)} cy={yAt(item.y)} r="4" fill="hsl(var(--primary))" opacity="0.85" />
+            <circle cx={xAt(item.x)} cy={yAt(item.y)} r="4" fill="var(--primary)" opacity="0.85" />
             <title>{`${item.label} · ${xFormatter(item.x)} · ${yFormatter(item.y)}`}</title>
           </g>
         ))}
-        <text x={padding} y={16} fontSize="10" fill="hsl(var(--muted-foreground))">
+        <text x={padding} y={16} fontSize="10" fill="var(--muted-foreground)">
           {yFormatter(maxY)}
         </text>
-        <text x={width - padding} y={height - 8} fontSize="10" textAnchor="end" fill="hsl(var(--muted-foreground))">
+        <text x={width - padding} y={height - 8} fontSize="10" textAnchor="end" fill="var(--muted-foreground)">
           {xFormatter(maxX)}
         </text>
       </svg>

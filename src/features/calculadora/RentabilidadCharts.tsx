@@ -26,29 +26,33 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
     [rows],
   );
 
-  const topByMargen = React.useMemo(() => {
-    return [...withMargen]
-      .sort((a, b) => (b.margenUnit ?? 0) * b.cantidad - (a.margenUnit ?? 0) * a.cantidad)
-      .slice(0, 10)
-      .map((r) => ({
-        label: r.referencia,
-        value: (r.margenUnit ?? 0) * r.cantidad,
-        meta: `${formatNumber(r.cantidad)} und`,
-        tone: ((r.margenUnit ?? 0) * r.cantidad) < 0 ? "danger" : "primary" as const,
-      }));
-  }, [withMargen]);
+  const topByMargen = React.useMemo(
+    () =>
+      [...withMargen]
+        .sort((a, b) => (b.margenUnit ?? 0) * b.cantidad - (a.margenUnit ?? 0) * a.cantidad)
+        .slice(0, 10)
+        .map((r) => ({
+          label: r.referencia,
+          value: (r.margenUnit ?? 0) * r.cantidad,
+          meta: `${formatNumber(r.cantidad)} und`,
+          tone: ((r.margenUnit ?? 0) * r.cantidad) < 0 ? ("danger" as const) : ("primary" as const),
+        })),
+    [withMargen],
+  );
 
-  const worstByPct = React.useMemo(() => {
-    return [...withMargen]
-      .sort((a, b) => (a.margenPct ?? 0) - (b.margenPct ?? 0))
-      .slice(0, 10)
-      .map((r) => ({
-        label: r.referencia,
-        value: r.margenPct ?? 0,
-        meta: formatCurrency(r.precioNeto),
-        tone: (r.margenPct ?? 0) < 0 ? "danger" : "muted" as const,
-      }));
-  }, [withMargen]);
+  const worstByPct = React.useMemo(
+    () =>
+      [...withMargen]
+        .sort((a, b) => (a.margenPct ?? 0) - (b.margenPct ?? 0))
+        .slice(0, 10)
+        .map((r) => ({
+          label: r.referencia,
+          value: r.margenPct ?? 0,
+          meta: formatCurrency(r.precioNeto),
+          tone: (r.margenPct ?? 0) < 0 ? ("danger" as const) : ("muted" as const),
+        })),
+    [withMargen],
+  );
 
   const distribution = React.useMemo(() => {
     return BUCKETS.map((b) => ({
