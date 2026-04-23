@@ -240,7 +240,7 @@ export function CostosProductosPage() {
       </div>
 
       {uploadOpen && user && (
-        <UploadDialog
+        <CostosUploadWizard
           defaultMonth={month}
           onClose={() => setUploadOpen(false)}
           onDone={(m) => {
