@@ -146,6 +146,23 @@ export function CostosProductosPage() {
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
   const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [expanded, setExpanded] = React.useState<{ cu: boolean; ct: boolean }>({
+    cu: false,
+    ct: false,
+  });
+
+  const toggleGroup = React.useCallback((id: GroupId) => {
+    setExpanded((s) => ({ ...s, [id]: !s[id] }));
+  }, []);
+
+  const visibleColCount = React.useMemo(
+    () =>
+      SECTIONS.reduce(
+        (n, s) => n + (s.kind === "cols" || expanded[s.id] ? s.cols.length : 1),
+        0,
+      ),
+    [expanded],
+  );
 
   const load = React.useCallback(async () => {
     setLoading(true);
