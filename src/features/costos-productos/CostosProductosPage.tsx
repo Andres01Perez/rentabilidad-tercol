@@ -255,4 +255,146 @@ export function CostosProductosPage() {
     </div>
   );
 }
+
+function CostosUploadWizard({
+  defaultMonth,
+  onClose,
+  onDone,
+  userId,
+  userName,
+}: {
+  defaultMonth: string;
+  onClose: () => void;
+  onDone: (month: string) => void;
+  userId: string;
+  userName: string;
+}) {
+  const [month, setMonth] = React.useState(defaultMonth);
+  const [pendingRows, setPendingRows] = React.useState<
+    Record<ColKey, string | number | null>[] | null
+  >(null);
+  const [confirm, setConfirm] = React.useState<{ existingCount: number } | null>(null);
+  const [overwriting, setOverwriting] = React.useState(false);
+
+  const insertRows = React.useCallback(
+    async (rowsToInsert: Record<ColKey, string | number | null>[]) => {
+      // Replace any existing rows for that month, then insert.
+      await supabase.from("product_costs").delete().eq("period_month", month);
+      const items = rowsToInsert
+        .filter((r) => r.referencia != null && String(r.referencia).trim() !== "")
+        .map((r) => {
+          const base: Record<string, unknown> = {
+            period_month: month,
+            referencia: String(r.referencia).trim(),
+            created_by_id: userId,
+            created_by_name: userName,
+          };
+          for (const k of NUMERIC_KEYS) {
+            base[k] = r[k] ?? null;
+          }
+          if (r.grupo != null) base.grupo = String(r.grupo).trim() || null;
+          if (r.descripcion != null) base.descripcion = String(r.descripcion).trim() || null;
+          return base;
+        });
+      await chunkedInsert(items, 500, async (batch) => {
+        const { error } = await supabase.from("product_costs").insert(batch as never);
+        if (error) throw error;
+      });
+      toast.success(`${items.length} productos cargados para ${formatMonth(month)}`);
+      onDone(month);
+    },
+    [month, userId, userName, onDone],
+  );
+
+  const handleConfirm = React.useCallback(
+    async (rows: Record<ColKey, string | number | null>[]) => {
+      const { count, error } = await supabase
+        .from("product_costs")
+        .select("id", { count: "exact", head: true })
+        .eq("period_month", month);
+      if (error) {
+        toast.error("No se pudo verificar el mes");
+        return false;
+      }
+      if ((count ?? 0) > 0) {
+        // Defer until user confirms overwrite.
+        setPendingRows(rows);
+        setConfirm({ existingCount: count ?? 0 });
+        return false;
+      }
+      try {
+        await insertRows(rows);
+        return true;
+      } catch (e) {
+        console.error(e);
+        toast.error("Error al subir el Excel");
+        return false;
+      }
+    },
+    [month, insertRows],
+  );
+
+  const handleOverwrite = async () => {
+    if (!pendingRows) return;
+    setOverwriting(true);
+    try {
+      await insertRows(pendingRows);
+      setConfirm(null);
+      setPendingRows(null);
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al sobrescribir el mes");
+    } finally {
+      setOverwriting(false);
+    }
+  };
+
+  return (
+    <>
+      <ImportWizardDialog<ColKey>
+        open
+        onClose={onClose}
+        title="Subir costos del mes"
+        description="Elige hoja, fila de encabezados y mapea las columnas. Solo Referencia y CTU son obligatorios."
+        fields={WIZARD_FIELDS}
+        numericKeys={NUMERIC_KEYS}
+        submitLabel="Subir costos"
+        onConfirm={handleConfirm}
+        extraStep1={
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Mes
+            </label>
+            <MonthSelect value={month} onValueChange={setMonth} className="h-10 w-full" />
+          </div>
+        }
+      />
+      <AlertDialog
+        open={!!confirm}
+        onOpenChange={(o) => {
+          if (!o && !overwriting) {
+            setConfirm(null);
+            setPendingRows(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sobrescribir mes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ya hay {confirm?.existingCount} productos para {formatMonth(month)}. Si continúas se reemplazarán por los del nuevo Excel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={overwriting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleOverwrite} disabled={overwriting}>
+              {overwriting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Sí, sobrescribir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
 }
