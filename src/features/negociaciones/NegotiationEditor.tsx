@@ -410,13 +410,10 @@ export function NegotiationEditor({
                         <button
                           key={r.referencia}
                           onClick={() => void addReference(r)}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                          className="flex w-full items-center px-3 py-2 text-left hover:bg-accent"
                         >
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="font-sans text-sm font-bold text-foreground">
                             {r.referencia}
-                          </span>
-                          <span className="flex-1 truncate text-xs">
-                            {r.descripcion ?? "—"}
                           </span>
                         </button>
                       ))
