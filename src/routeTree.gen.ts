@@ -45,7 +45,9 @@ const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
   id: '/listas-precios',
   path: '/listas-precios',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/listas-precios.lazy').then((d) => d.Route),
+)
 const AppHistorialRoute = AppHistorialRouteImport.update({
   id: '/historial',
   path: '/historial',
