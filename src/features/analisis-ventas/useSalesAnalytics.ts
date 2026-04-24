@@ -1,6 +1,5 @@
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { DateRange } from "@/components/period/DateRangePicker";
 
 export interface SaleRow {
   id: string;
@@ -72,7 +71,7 @@ function toIsoDate(d: Date) {
 }
 
 export interface UseSalesAnalyticsArgs {
-  range: DateRange;
+  salesMonth: string;
   costPeriodMonth: string; // "YYYY-MM-01"
   opPeriodMonth: string; // "YYYY-MM-01"
   filters: {
@@ -83,9 +82,21 @@ export interface UseSalesAnalyticsArgs {
   refreshKey: number;
 }
 
+function getMonthBounds(monthValue: string) {
+  const [y, m] = monthValue.split("-").map(Number);
+  const from = new Date(y, (m ?? 1) - 1, 1);
+  const to = new Date(y, m ?? 1, 0);
+  return { from: toIsoDate(from), to: toIsoDate(to) };
+}
+
+function sortMonthsDesc(values: string[]) {
+  return Array.from(new Set(values)).sort((a, b) => b.localeCompare(a));
+}
+
 export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
-  const { range, costPeriodMonth, opPeriodMonth, filters, refreshKey } = args;
+  const { salesMonth, costPeriodMonth, opPeriodMonth, filters, refreshKey } = args;
   const [salesRows, setSalesRows] = React.useState<SaleRow[]>([]);
+  const [salesMonths, setSalesMonths] = React.useState<string[]>([]);
   // ctuMap solo contiene referencias con CTU > 0 (válidas para margen).
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
   // zeroCostSet: referencias con registro pero CTU <= 0 (excluidas del margen).
@@ -102,6 +113,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     (async () => {
       setLoading(true);
       const PAGE = 1000;
+      const { from: fromDate, to: toDate } = getMonthBounds(salesMonth);
       const baseSelect = "id, sale_date, year, month, day, vendedor, dependencia, tercero, referencia, cantidad, valor_total, precio_unitario";
       const buildQuery = (from: number, to: number, withCount = false) => {
         let q = supabase
@@ -109,8 +121,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
           .select(baseSelect, withCount ? { count: "exact" } : undefined)
           .order("sale_date", { ascending: true })
           .range(from, to);
-        if (range.from) q = q.gte("sale_date", toIsoDate(range.from));
-        if (range.to) q = q.lte("sale_date", toIsoDate(range.to));
+        q = q.gte("sale_date", fromDate).lte("sale_date", toDate);
         return q;
       };
       // Primera página con count exacto.
@@ -152,7 +163,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     return () => {
       cancelled = true;
     };
-  }, [range.from, range.to, refreshKey]);
+  }, [salesMonth, refreshKey]);
 
   // Chequeo global de existencia de ventas — solo una vez al montar (y al
   // forzar refresh). Evita reconsultas en cascada y parpadeos del estado vacío.
@@ -163,6 +174,41 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         .from("sales")
         .select("id", { count: "exact", head: true });
       if (!cancelled) setHasAnySales((count ?? 0) > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const PAGE = 1000;
+      const months: string[] = [];
+      let from = 0;
+      let keepGoing = true;
+      while (keepGoing) {
+        const { data, error } = await supabase
+          .from("sales")
+          .select("year, month")
+          .order("year", { ascending: false })
+          .order("month", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) {
+          console.error("Error loading sales months", error);
+          break;
+        }
+        const batch = data ?? [];
+        for (const row of batch) {
+          const year = Number(row.year);
+          const month = Number(row.month);
+          if (!Number.isFinite(year) || !Number.isFinite(month)) continue;
+          months.push(`${year}-${String(month).padStart(2, "0")}-01`);
+        }
+        if (batch.length < PAGE) keepGoing = false;
+        else from += PAGE;
+      }
+      if (!cancelled) setSalesMonths(sortMonthsDesc(months));
     })();
     return () => {
       cancelled = true;
@@ -434,6 +480,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     loading,
     hasLoadedOnce,
     hasAnySales,
+    salesMonths,
     pctOperacional,
     salesRows,
     filteredRows,
