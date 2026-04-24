@@ -200,28 +200,39 @@ function OperationalSplitCard({
   amount: string;
   items: Array<{ id: string; name: string; percentage: number }>;
 }) {
+  const visibleItems = items.slice(0, 4);
   return (
-    <div className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card p-5 shadow-sm backdrop-blur">
+    <div className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card p-5 shadow-sm backdrop-blur md:min-h-[132px]">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Operacional
         </span>
         <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
       </div>
-      <p className="mt-2 truncate text-2xl font-bold tracking-tight md:text-3xl">{percentage}</p>
-      <p className="mt-1 truncate text-sm text-muted-foreground">{amount}</p>
-      {items.length > 0 && (
-        <div className="mt-4 space-y-2 border-t border-border/50 pt-3">
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
-              <span className="min-w-0 truncate text-muted-foreground">{item.name}</span>
-              <span className="shrink-0 text-right font-medium tabular-nums">
-                {formatPercent(item.percentage, 1)}
-              </span>
-            </div>
-          ))}
+      <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,220px)] md:items-start">
+        <div className="min-w-0">
+          <p className="truncate text-2xl font-bold tracking-tight md:text-3xl">{percentage}</p>
+          <p className="mt-1 truncate text-sm text-muted-foreground">{amount}</p>
         </div>
-      )}
+        {visibleItems.length > 0 && (
+          <div className="min-w-0 space-y-2 border-t border-border/50 pt-3 md:mt-0 md:border-l md:border-t-0 md:pl-4 md:pt-0">
+            {visibleItems.map((item) => (
+              <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-xs">
+                <span className="min-w-0 truncate text-muted-foreground" title={item.name}>{item.name}</span>
+                <span className="shrink-0 text-right font-medium tabular-nums">
+                  {formatPercent(item.percentage, 1)}
+                </span>
+                <div className="col-span-2 h-1 overflow-hidden rounded-full bg-muted/60">
+                  <div
+                    className="h-full rounded-full bg-gradient-brand"
+                    style={{ width: `${Math.max(6, Math.min(item.percentage, 100))}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -503,7 +514,7 @@ export function AnalisisVentasPage() {
       margenU: parseNumFilter(colFilters.margenU),
       margenPct: parseNumFilter(colFilters.margenPct),
     };
-    const filtered = analytics.filteredRows.filter((r) => {
+      const filtered = analytics.filteredRows.filter((r) => {
       if (q) {
         const hit =
           (r.referencia ?? "").toLowerCase().includes(q) ||
@@ -519,7 +530,7 @@ export function AnalisisVentasPage() {
       if (!matchNumFilter(Number(r.cantidad), numFilters.cantidad)) return false;
       if (!matchNumFilter(r.precio_unitario, numFilters.precio_unitario)) return false;
       if (!matchNumFilter(r.ctu, numFilters.ctu)) return false;
-      const margenU = (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+      const margenU = r.margenUnitario;
       if (!matchNumFilter(margenU, numFilters.margenU)) return false;
       if (!matchNumFilter(r.margenPct, numFilters.margenPct)) return false;
       return true;
@@ -545,7 +556,7 @@ export function AnalisisVentasPage() {
         case "ctu":
           return r.ctu;
         case "margenU":
-          return (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+          return r.margenUnitario;
         case "margenPct":
           return r.margenPct;
       }
@@ -640,7 +651,7 @@ export function AnalisisVentasPage() {
             </div>
           )}
           {/* Filtros sticky */}
-          <div className="glass sticky top-16 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
+          <div className="glass sticky top-[4.5rem] z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de ventas
@@ -750,7 +761,7 @@ export function AnalisisVentasPage() {
               icon={PiggyBank}
               label="Margen bruto en plata"
               value={formatCurrency(analytics.kpis.margenBruto)}
-              hint={`Base computable: ${formatCurrency(analytics.kpis.ventasComputables)}`}
+              hint={`Base neta: ${formatCurrency(analytics.kpis.ventasNetas)}`}
               tone={analytics.kpis.margenBruto >= 0 ? "positive" : "negative"}
             />
             <KpiCard
@@ -864,7 +875,7 @@ export function AnalisisVentasPage() {
                 </TableHeader>
                 <TableBody>
                   {detailRows.map((r) => {
-                    const margenU = (r.precio_unitario ?? 0) - (r.ctu ?? 0);
+                    const margenU = r.margenUnitario;
                     const isNeg = (r.margenPct ?? 0) < 0;
                     return (
                       <TableRow key={r.id}>
@@ -888,7 +899,7 @@ export function AnalisisVentasPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", r.computable && margenU < 0 && "text-rose-600")}>
+                        <TableCell className={cn("text-right tabular-nums", r.computable && (margenU ?? 0) < 0 && "text-rose-600")}>
                           {r.computable ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums", isNeg && "font-semibold text-rose-600")}>
