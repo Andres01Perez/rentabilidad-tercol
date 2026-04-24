@@ -792,6 +792,7 @@ export function AnalisisVentasPage() {
             <OperationalSplitCard
               percentage={formatPercent(analytics.kpis.pctOperacional, 1)}
               amount={formatCurrency(analytics.kpis.operacionalMonto)}
+              items={analytics.operationalBreakdown}
             />
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
