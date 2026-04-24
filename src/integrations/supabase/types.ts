@@ -76,6 +76,36 @@ export type Database = {
           },
         ]
       }
+      financial_discounts: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          percentage: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          percentage: number
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          percentage?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       negotiation_items: {
         Row: {
           cantidad: number

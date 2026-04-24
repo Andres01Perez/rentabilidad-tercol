@@ -21,7 +21,6 @@ export interface AnalyticsRow extends SaleRow {
   costoLinea: number;
   margenBruto: number;
   margenPct: number | null;
-  margenNeto: number;
   /** true si la referencia tiene registro de costo pero es <= 0 */
   costoCero: boolean;
   /** true si la referencia no tiene registro de costo en el período */
@@ -35,13 +34,12 @@ export interface RankingItem {
   ventas: number;
   costo: number;
   margenBruto: number;
-  margenNeto: number;
   margenPct: number;
   cantidad: number;
 }
 
 export interface MonthlySeries {
-  month: string; // "YYYY-MM"
+  month: string;
   label: string;
   ventas: number;
   costo: number;
@@ -49,9 +47,15 @@ export interface MonthlySeries {
 }
 
 export interface DailySeries {
-  day: string; // "YYYY-MM-DD"
+  day: string;
   label: string;
   ventas: number;
+}
+
+export interface FinancialDiscountOption {
+  id: string;
+  label: string;
+  percentage: number;
 }
 
 const MONTHS_ES_SHORT = [
@@ -72,8 +76,9 @@ function toIsoDate(d: Date) {
 
 export interface UseSalesAnalyticsArgs {
   salesMonth: string;
-  costPeriodMonth: string; // "YYYY-MM-01"
-  opPeriodMonth: string; // "YYYY-MM-01"
+  costPeriodMonth: string;
+  opPeriodMonth: string;
+  financialDiscountPct: number;
   filters: {
     vendedores: string[];
     dependencias: string[];
@@ -94,20 +99,17 @@ function sortMonthsDesc(values: string[]) {
 }
 
 export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
-  const { salesMonth, costPeriodMonth, opPeriodMonth, filters, refreshKey } = args;
+  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
   const [salesRows, setSalesRows] = React.useState<SaleRow[]>([]);
   const [salesMonths, setSalesMonths] = React.useState<string[]>([]);
-  // ctuMap solo contiene referencias con CTU > 0 (válidas para margen).
+  const [financialDiscounts, setFinancialDiscounts] = React.useState<FinancialDiscountOption[]>([]);
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
-  // zeroCostSet: referencias con registro pero CTU <= 0 (excluidas del margen).
   const [zeroCostSet, setZeroCostSet] = React.useState<Set<string>>(new Set());
   const [pctOperacional, setPctOperacional] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [hasAnySales, setHasAnySales] = React.useState(false);
 
-  // Load sales filtered by date range. Primera página secuencial para descubrir
-  // el total; el resto se trae en paralelo (3x más rápido en datasets grandes).
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,7 +126,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         q = q.gte("sale_date", fromDate).lte("sale_date", toDate);
         return q;
       };
-      // Primera página con count exacto.
       const first = await buildQuery(0, PAGE - 1, true);
       if (first.error) {
         console.error("Error loading sales", first.error);
@@ -141,9 +142,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         for (let from = PAGE; from < total; from += PAGE) {
           ranges.push([from, Math.min(from + PAGE - 1, total - 1)]);
         }
-        const results = await Promise.all(
-          ranges.map(([f, t]) => buildQuery(f, t)),
-        );
+        const results = await Promise.all(ranges.map(([f, t]) => buildQuery(f, t)));
         for (const r of results) {
           if (r.error) {
             console.error("Error loading sales page", r.error);
@@ -153,8 +152,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         }
       }
       if (cancelled) return;
-      // Stale-while-revalidate: solo reemplazamos al éxito, nunca limpiamos
-      // la data anterior mientras llegan los nuevos resultados.
       setSalesRows(all);
       if (all.length > 0) setHasAnySales(true);
       setLoading(false);
@@ -165,8 +162,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [salesMonth, refreshKey]);
 
-  // Chequeo global de existencia de ventas — solo una vez al montar (y al
-  // forzar refresh). Evita reconsultas en cascada y parpadeos del estado vacío.
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -215,7 +210,35 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [refreshKey]);
 
-  // Load product_costs for selected month → Map<referencia, ctu>
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("financial_discounts" as never)
+        .select("id, label, percentage, sort_order, is_active")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (error) {
+        console.error("Error loading financial discounts", error);
+        return;
+      }
+      if (cancelled) return;
+      const rows = ((data ?? []) as Array<{
+        id: string;
+        label: string;
+        percentage: number | string;
+      }>).map((row) => ({
+        id: row.id,
+        label: row.label,
+        percentage: Number(row.percentage ?? 0),
+      }));
+      setFinancialDiscounts(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -238,8 +261,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         for (const r of batch) {
           if (r.ctu !== null && r.ctu !== undefined) {
             const v = Number(r.ctu);
-            // Solo costos > 0 son válidos para cálculo de margen.
-            // CTU <= 0 sesgaría el margen al 100%, los marcamos como excluidos.
             if (v > 0) {
               map.set(r.referencia, v);
             } else {
@@ -260,7 +281,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [costPeriodMonth]);
 
-  // Load operational_costs for selected month → sum of percentages
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -269,7 +289,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         .select("percentage, cost_center_id, cost_centers!inner(is_active)")
         .eq("period_month", opPeriodMonth);
       if (error) {
-        // Fallback without join if FK relation name differs
         const { data: simple } = await supabase
           .from("operational_costs")
           .select("percentage")
@@ -290,12 +309,10 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [opPeriodMonth]);
 
-  // Compute analytics rows + filters
   const filteredRows = React.useMemo<AnalyticsRow[]>(() => {
     const vSet = new Set(filters.vendedores);
     const dSet = new Set(filters.dependencias);
     const tSet = new Set(filters.terceros);
-    const opFactor = 1 - pctOperacional / 100;
     return salesRows
       .filter((r) => (vSet.size ? vSet.has(r.vendedor ?? "") : true))
       .filter((r) => (dSet.size ? dSet.has(r.dependencia ?? "") : true))
@@ -311,28 +328,23 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
           computable && Number(r.valor_total) !== 0
             ? (margenBruto / Number(r.valor_total)) * 100
             : null;
-        const margenNeto = computable ? margenBruto * opFactor : 0;
         return {
           ...r,
           ctu,
           costoLinea,
           margenBruto,
           margenPct,
-          margenNeto,
           costoCero,
           sinCosto,
           computable,
         };
       });
-  }, [salesRows, ctuMap, pctOperacional, filters]);
+  }, [salesRows, ctuMap, filters]);
 
-  // KPIs — solo cuentan filas computables (con CTU > 0) para el margen.
-  // Las filas excluidas se contabilizan aparte para mostrar el impacto.
   const kpis = React.useMemo(() => {
-    let ventas = 0,
-      costo = 0,
-      margenBruto = 0,
-      margenNeto = 0;
+    let ventas = 0;
+    let costo = 0;
+    let margenBruto = 0;
     let ventasComputables = 0;
     let lineasExcluidas = 0;
     let ventasExcluidas = 0;
@@ -341,13 +353,13 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     const productos = new Set<string>();
     const clientes = new Set<string>();
     const vendedores = new Set<string>();
+
     for (const r of filteredRows) {
       ventas += Number(r.valor_total);
       if (r.computable) {
         ventasComputables += Number(r.valor_total);
         costo += r.costoLinea;
         margenBruto += r.margenBruto;
-        margenNeto += r.margenNeto;
       } else {
         lineasExcluidas++;
         ventasExcluidas += Number(r.valor_total);
@@ -358,15 +370,29 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       if (r.tercero) clientes.add(r.tercero);
       if (r.vendedor) vendedores.add(r.vendedor);
     }
+
+    const descuentoFinancieroMonto = ventasComputables * (financialDiscountPct / 100);
+    const ventasNetas = ventasComputables - descuentoFinancieroMonto;
+    const utilidad = ventasNetas - costo;
+    const operacionalMonto = ventas * (pctOperacional / 100);
+    const utilidadOperacional = utilidad - operacionalMonto;
+    const margenPct = ventasComputables !== 0 ? (margenBruto / ventasComputables) * 100 : 0;
+    const utilidadOperacionalPct = margenPct - pctOperacional;
+
     return {
       ventas,
       ventasComputables,
       costo,
       margenBruto,
-      margenNeto,
-      // Margen % calculado solo sobre ventas computables (sin sesgo).
-      margenPct: ventasComputables !== 0 ? (margenBruto / ventasComputables) * 100 : 0,
-      margenNetoPct: ventasComputables !== 0 ? (margenNeto / ventasComputables) * 100 : 0,
+      margenPct,
+      pctOperacional,
+      operacionalMonto,
+      descuentoFinancieroPct: financialDiscountPct,
+      descuentoFinancieroMonto,
+      ventasNetas,
+      utilidad,
+      utilidadOperacional,
+      utilidadOperacionalPct,
       productos: productos.size,
       clientes: clientes.size,
       vendedores: vendedores.size,
@@ -376,9 +402,8 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       lineasCostoCero,
       lineasSinCosto,
     };
-  }, [filteredRows]);
+  }, [filteredRows, financialDiscountPct, pctOperacional]);
 
-  // Monthly series — solo filas computables para no sesgar margen.
   const monthlySeries = React.useMemo<MonthlySeries[]>(() => {
     const map = new Map<string, MonthlySeries>();
     for (const r of filteredRows) {
@@ -399,7 +424,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredRows]);
 
-  // Daily series (last month in range or whole range if small)
   const dailySeries = React.useMemo<DailySeries[]>(() => {
     const map = new Map<string, DailySeries>();
     for (const r of filteredRows) {
@@ -415,11 +439,9 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     return Array.from(map.values()).sort((a, b) => a.day.localeCompare(b.day));
   }, [filteredRows]);
 
-  // Generic ranking builder
   const buildRanking = React.useCallback(
     (getKey: (r: AnalyticsRow) => string | null | undefined): RankingItem[] => {
       const map = new Map<string, RankingItem>();
-      const opFactor = 1 - pctOperacional / 100;
       for (const r of filteredRows) {
         if (!r.computable) continue;
         const k = getKey(r);
@@ -429,7 +451,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
           ventas: 0,
           costo: 0,
           margenBruto: 0,
-          margenNeto: 0,
           margenPct: 0,
           cantidad: 0,
         };
@@ -441,13 +462,12 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       }
       const arr = Array.from(map.values()).map((x) => ({
         ...x,
-        margenNeto: x.margenBruto * opFactor,
         margenPct: x.ventas !== 0 ? (x.margenBruto / x.ventas) * 100 : 0,
       }));
       arr.sort((a, b) => b.margenBruto - a.margenBruto);
       return arr;
     },
-    [filteredRows, pctOperacional],
+    [filteredRows],
   );
 
   const rankings = React.useMemo(() => {
@@ -459,7 +479,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [buildRanking]);
 
-  // Unique values for filter dropdowns
   const uniques = React.useMemo(() => {
     const v = new Set<string>();
     const d = new Set<string>();
@@ -481,6 +500,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     hasLoadedOnce,
     hasAnySales,
     salesMonths,
+    financialDiscounts,
     pctOperacional,
     salesRows,
     filteredRows,
