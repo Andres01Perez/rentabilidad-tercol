@@ -58,6 +58,12 @@ export interface FinancialDiscountOption {
   percentage: number;
 }
 
+export interface OperationalBreakdownItem {
+  id: string;
+  name: string;
+  percentage: number;
+}
+
 const MONTHS_ES_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
@@ -106,6 +112,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
   const [zeroCostSet, setZeroCostSet] = React.useState<Set<string>>(new Set());
   const [pctOperacional, setPctOperacional] = React.useState<number>(0);
+  const [operationalBreakdown, setOperationalBreakdown] = React.useState<OperationalBreakdownItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [hasAnySales, setHasAnySales] = React.useState(false);
@@ -286,7 +293,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     (async () => {
       const { data, error } = await supabase
         .from("operational_costs")
-        .select("percentage, cost_center_id, cost_centers!inner(is_active)")
+        .select("percentage, cost_center_id, cost_centers!inner(id, name, is_active)")
         .eq("period_month", opPeriodMonth);
       if (error) {
         const { data: simple } = await supabase
@@ -296,12 +303,29 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         if (!cancelled) {
           const sum = (simple ?? []).reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
           setPctOperacional(sum);
+          setOperationalBreakdown([]);
         }
         return;
       }
       if (!cancelled) {
-        const sum = (data ?? []).reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
+        const rows = (data ?? []) as Array<{
+          cost_center_id: string;
+          percentage: number | string | null;
+          cost_centers?: { id: string; name: string; is_active: boolean } | { id: string; name: string; is_active: boolean }[] | null;
+        }>;
+        const sum = rows.reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
+        const breakdown = rows
+          .map((row) => {
+            const center = Array.isArray(row.cost_centers) ? row.cost_centers[0] : row.cost_centers;
+            return {
+              id: row.cost_center_id,
+              name: center?.name ?? "Centro sin nombre",
+              percentage: Number(row.percentage ?? 0),
+            };
+          })
+          .sort((a, b) => b.percentage - a.percentage);
         setPctOperacional(sum);
+        setOperationalBreakdown(breakdown);
       }
     })();
     return () => {
@@ -502,6 +526,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     salesMonths,
     financialDiscounts,
     pctOperacional,
+    operationalBreakdown,
     salesRows,
     filteredRows,
     kpis,
