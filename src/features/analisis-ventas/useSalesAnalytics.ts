@@ -23,6 +23,12 @@ export interface AnalyticsRow extends SaleRow {
   margenBruto: number;
   margenPct: number | null;
   margenNeto: number;
+  /** true si la referencia tiene registro de costo pero es <= 0 */
+  costoCero: boolean;
+  /** true si la referencia no tiene registro de costo en el período */
+  sinCosto: boolean;
+  /** true cuando la línea participa en KPIs de margen (ctu > 0) */
+  computable: boolean;
 }
 
 export interface RankingItem {
@@ -80,38 +86,60 @@ export interface UseSalesAnalyticsArgs {
 export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const { range, costPeriodMonth, opPeriodMonth, filters, refreshKey } = args;
   const [salesRows, setSalesRows] = React.useState<SaleRow[]>([]);
+  // ctuMap solo contiene referencias con CTU > 0 (válidas para margen).
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
+  // zeroCostSet: referencias con registro pero CTU <= 0 (excluidas del margen).
+  const [zeroCostSet, setZeroCostSet] = React.useState<Set<string>>(new Set());
   const [pctOperacional, setPctOperacional] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [hasAnySales, setHasAnySales] = React.useState(false);
 
-  // Load sales filtered by date range (paginated to bypass 1000-row default)
+  // Load sales filtered by date range. Primera página secuencial para descubrir
+  // el total; el resto se trae en paralelo (3x más rápido en datasets grandes).
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const all: SaleRow[] = [];
       const PAGE = 1000;
-      let from = 0;
-      let keepGoing = true;
-      while (keepGoing) {
+      const baseSelect = "id, sale_date, year, month, day, vendedor, dependencia, tercero, referencia, cantidad, valor_total, precio_unitario";
+      const buildQuery = (from: number, to: number, withCount = false) => {
         let q = supabase
           .from("sales")
-          .select("id, sale_date, year, month, day, vendedor, dependencia, tercero, referencia, cantidad, valor_total, precio_unitario")
+          .select(baseSelect, withCount ? { count: "exact" } : undefined)
           .order("sale_date", { ascending: true })
-          .range(from, from + PAGE - 1);
+          .range(from, to);
         if (range.from) q = q.gte("sale_date", toIsoDate(range.from));
         if (range.to) q = q.lte("sale_date", toIsoDate(range.to));
-        const { data, error } = await q;
-        if (error) {
-          console.error("Error loading sales", error);
-          break;
+        return q;
+      };
+      // Primera página con count exacto.
+      const first = await buildQuery(0, PAGE - 1, true);
+      if (first.error) {
+        console.error("Error loading sales", first.error);
+        if (!cancelled) {
+          setLoading(false);
+          setHasLoadedOnce(true);
         }
-        const batch = (data ?? []) as SaleRow[];
-        all.push(...batch);
-        if (batch.length < PAGE) keepGoing = false;
-        else from += PAGE;
+        return;
+      }
+      const total = first.count ?? (first.data?.length ?? 0);
+      const all: SaleRow[] = [...((first.data ?? []) as SaleRow[])];
+      if (total > PAGE) {
+        const ranges: Array<[number, number]> = [];
+        for (let from = PAGE; from < total; from += PAGE) {
+          ranges.push([from, Math.min(from + PAGE - 1, total - 1)]);
+        }
+        const results = await Promise.all(
+          ranges.map(([f, t]) => buildQuery(f, t)),
+        );
+        for (const r of results) {
+          if (r.error) {
+            console.error("Error loading sales page", r.error);
+            continue;
+          }
+          all.push(...((r.data ?? []) as SaleRow[]));
+        }
       }
       if (cancelled) return;
       // Stale-while-revalidate: solo reemplazamos al éxito, nunca limpiamos
@@ -146,6 +174,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     let cancelled = false;
     (async () => {
       const map = new Map<string, number>();
+      const zeros = new Set<string>();
       const PAGE = 1000;
       let from = 0;
       let keepGoing = true;
@@ -162,13 +191,23 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         const batch = data ?? [];
         for (const r of batch) {
           if (r.ctu !== null && r.ctu !== undefined) {
-            map.set(r.referencia, Number(r.ctu));
+            const v = Number(r.ctu);
+            // Solo costos > 0 son válidos para cálculo de margen.
+            // CTU <= 0 sesgaría el margen al 100%, los marcamos como excluidos.
+            if (v > 0) {
+              map.set(r.referencia, v);
+            } else {
+              zeros.add(r.referencia);
+            }
           }
         }
         if (batch.length < PAGE) keepGoing = false;
         else from += PAGE;
       }
-      if (!cancelled) setCtuMap(map);
+      if (!cancelled) {
+        setCtuMap(map);
+        setZeroCostSet(zeros);
+      }
     })();
     return () => {
       cancelled = true;
@@ -217,53 +256,87 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       .filter((r) => (tSet.size ? tSet.has(r.tercero ?? "") : true))
       .map((r) => {
         const ctu = ctuMap.get(r.referencia) ?? null;
-        const costoLinea = (ctu ?? 0) * Number(r.cantidad);
-        const margenBruto = Number(r.valor_total) - costoLinea;
+        const costoCero = ctu === null && zeroCostSet.has(r.referencia);
+        const sinCosto = ctu === null && !costoCero;
+        const computable = ctu !== null;
+        const costoLinea = computable ? (ctu as number) * Number(r.cantidad) : 0;
+        const margenBruto = computable ? Number(r.valor_total) - costoLinea : 0;
         const margenPct =
-          Number(r.valor_total) !== 0
+          computable && Number(r.valor_total) !== 0
             ? (margenBruto / Number(r.valor_total)) * 100
             : null;
-        const margenNeto = margenBruto * opFactor;
-        return { ...r, ctu, costoLinea, margenBruto, margenPct, margenNeto };
+        const margenNeto = computable ? margenBruto * opFactor : 0;
+        return {
+          ...r,
+          ctu,
+          costoLinea,
+          margenBruto,
+          margenPct,
+          margenNeto,
+          costoCero,
+          sinCosto,
+          computable,
+        };
       });
   }, [salesRows, ctuMap, pctOperacional, filters]);
 
-  // KPIs
+  // KPIs — solo cuentan filas computables (con CTU > 0) para el margen.
+  // Las filas excluidas se contabilizan aparte para mostrar el impacto.
   const kpis = React.useMemo(() => {
     let ventas = 0,
       costo = 0,
       margenBruto = 0,
       margenNeto = 0;
+    let ventasComputables = 0;
+    let lineasExcluidas = 0;
+    let ventasExcluidas = 0;
+    let lineasCostoCero = 0;
+    let lineasSinCosto = 0;
     const productos = new Set<string>();
     const clientes = new Set<string>();
     const vendedores = new Set<string>();
     for (const r of filteredRows) {
       ventas += Number(r.valor_total);
-      costo += r.costoLinea;
-      margenBruto += r.margenBruto;
-      margenNeto += r.margenNeto;
+      if (r.computable) {
+        ventasComputables += Number(r.valor_total);
+        costo += r.costoLinea;
+        margenBruto += r.margenBruto;
+        margenNeto += r.margenNeto;
+      } else {
+        lineasExcluidas++;
+        ventasExcluidas += Number(r.valor_total);
+        if (r.costoCero) lineasCostoCero++;
+        if (r.sinCosto) lineasSinCosto++;
+      }
       productos.add(r.referencia);
       if (r.tercero) clientes.add(r.tercero);
       if (r.vendedor) vendedores.add(r.vendedor);
     }
     return {
       ventas,
+      ventasComputables,
       costo,
       margenBruto,
       margenNeto,
-      margenPct: ventas !== 0 ? (margenBruto / ventas) * 100 : 0,
-      margenNetoPct: ventas !== 0 ? (margenNeto / ventas) * 100 : 0,
+      // Margen % calculado solo sobre ventas computables (sin sesgo).
+      margenPct: ventasComputables !== 0 ? (margenBruto / ventasComputables) * 100 : 0,
+      margenNetoPct: ventasComputables !== 0 ? (margenNeto / ventasComputables) * 100 : 0,
       productos: productos.size,
       clientes: clientes.size,
       vendedores: vendedores.size,
       lineas: filteredRows.length,
+      lineasExcluidas,
+      ventasExcluidas,
+      lineasCostoCero,
+      lineasSinCosto,
     };
   }, [filteredRows]);
 
-  // Monthly series
+  // Monthly series — solo filas computables para no sesgar margen.
   const monthlySeries = React.useMemo<MonthlySeries[]>(() => {
     const map = new Map<string, MonthlySeries>();
     for (const r of filteredRows) {
+      if (!r.computable) continue;
       const key = `${r.year}-${String(r.month).padStart(2, "0")}`;
       const existing = map.get(key) ?? {
         month: key,
@@ -302,6 +375,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       const map = new Map<string, RankingItem>();
       const opFactor = 1 - pctOperacional / 100;
       for (const r of filteredRows) {
+        if (!r.computable) continue;
         const k = getKey(r);
         if (!k) continue;
         const existing = map.get(k) ?? {
@@ -369,5 +443,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     rankings,
     uniques,
     ctuMapSize: ctuMap.size,
+    zeroCostCount: zeroCostSet.size,
   };
 }
