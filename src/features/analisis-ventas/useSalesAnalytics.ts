@@ -1,37 +1,7 @@
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface SaleRow {
-  id: string;
-  sale_date: string;
-  year: number;
-  month: number;
-  day: number;
-  vendedor: string | null;
-  dependencia: string | null;
-  tercero: string | null;
-  referencia: string;
-  cantidad: number;
-  valor_total: number;
-  precio_unitario: number | null;
-}
-
-export interface AnalyticsRow extends SaleRow {
-  ctu: number | null;
-  costoLinea: number;
-  valorNeto: number;
-  precioUnitarioNeto: number | null;
-  margenUnitario: number | null;
-  margenBruto: number;
-  margenPct: number | null;
-  /** true si la referencia tiene registro de costo pero es <= 0 */
-  costoCero: boolean;
-  /** true si la referencia no tiene registro de costo en el período */
-  sinCosto: boolean;
-  /** true cuando la línea participa en KPIs de margen (ctu > 0) */
-  computable: boolean;
-}
-
+// ---------- Tipos públicos (compatibles con la versión anterior) ----------
 export interface RankingItem {
   key: string;
   ventas: number;
@@ -69,20 +39,44 @@ export interface OperationalBreakdownItem {
   percentage: number;
 }
 
-const MONTHS_ES_SHORT = [
-  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
-];
-
-function fmtMonthShort(year: number, month: number) {
-  return `${MONTHS_ES_SHORT[month - 1]} ${year}`;
+export interface DashboardKpis {
+  ventas: number;
+  ventasComputables: number;
+  costo: number;
+  margenBruto: number;
+  margenPct: number;
+  pctOperacional: number;
+  operacionalMonto: number;
+  descuentoFinancieroPct: number;
+  descuentoFinancieroMonto: number;
+  ventasNetas: number;
+  utilidad: number;
+  utilidadOperacional: number;
+  utilidadOperacionalPct: number;
+  productos: number;
+  clientes: number;
+  vendedores: number;
+  lineas: number;
+  lineasExcluidas: number;
+  ventasExcluidas: number;
+  lineasCostoCero: number;
+  lineasSinCosto: number;
 }
 
-function toIsoDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+export interface DashboardData {
+  kpis: DashboardKpis;
+  monthlySeries: MonthlySeries[];
+  dailySeries: DailySeries[];
+  rankings: {
+    vendedores: RankingItem[];
+    dependencias: RankingItem[];
+    terceros: RankingItem[];
+    productos: RankingItem[];
+  };
+  uniques: { vendedores: string[]; dependencias: string[]; terceros: string[] };
+  operationalBreakdown: OperationalBreakdownItem[];
+  ctuMapSize: number;
+  hasAnySales: boolean;
 }
 
 export interface UseSalesAnalyticsArgs {
@@ -98,467 +92,234 @@ export interface UseSalesAnalyticsArgs {
   refreshKey: number;
 }
 
-function getMonthBounds(monthValue: string) {
-  const [y, m] = monthValue.split("-").map(Number);
-  const from = new Date(y, (m ?? 1) - 1, 1);
-  const to = new Date(y, m ?? 1, 0);
-  return { from: toIsoDate(from), to: toIsoDate(to) };
-}
+const EMPTY_KPIS: DashboardKpis = {
+  ventas: 0, ventasComputables: 0, costo: 0, margenBruto: 0, margenPct: 0,
+  pctOperacional: 0, operacionalMonto: 0, descuentoFinancieroPct: 0,
+  descuentoFinancieroMonto: 0, ventasNetas: 0, utilidad: 0,
+  utilidadOperacional: 0, utilidadOperacionalPct: 0,
+  productos: 0, clientes: 0, vendedores: 0, lineas: 0,
+  lineasExcluidas: 0, ventasExcluidas: 0, lineasCostoCero: 0, lineasSinCosto: 0,
+};
 
-function sortMonthsDesc(values: string[]) {
-  return Array.from(new Set(values)).sort((a, b) => b.localeCompare(a));
+const EMPTY_DATA: DashboardData = {
+  kpis: EMPTY_KPIS,
+  monthlySeries: [],
+  dailySeries: [],
+  rankings: { vendedores: [], dependencias: [], terceros: [], productos: [] },
+  uniques: { vendedores: [], dependencias: [], terceros: [] },
+  operationalBreakdown: [],
+  ctuMapSize: 0,
+  hasAnySales: false,
+};
+
+function toCostMonthDate(salesMonth: string): string {
+  // 'YYYY-MM-01' ya es el formato correcto.
+  return salesMonth;
 }
 
 export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
-  const [salesRows, setSalesRows] = React.useState<SaleRow[]>([]);
+  const [data, setData] = React.useState<DashboardData>(EMPTY_DATA);
   const [salesMonths, setSalesMonths] = React.useState<string[]>([]);
   const [financialDiscounts, setFinancialDiscounts] = React.useState<FinancialDiscountOption[]>([]);
-  const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
-  const [zeroCostSet, setZeroCostSet] = React.useState<Set<string>>(new Set());
-  const [pctOperacional, setPctOperacional] = React.useState<number>(0);
-  const [operationalBreakdown, setOperationalBreakdown] = React.useState<OperationalBreakdownItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
-  const [hasAnySales, setHasAnySales] = React.useState(false);
 
+  // Estabilizamos la dependencia de filtros por su contenido (no por referencia).
+  const vendedoresKey = filters.vendedores.join("|");
+  const dependenciasKey = filters.dependencias.join("|");
+  const tercerosKey = filters.terceros.join("|");
+
+  // 1) Catálogo de meses de ventas (1 RPC)
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: rows, error } = await supabase.rpc("get_sales_months");
+      if (cancelled) return;
+      if (error) {
+        console.error("get_sales_months", error);
+        return;
+      }
+      const months = (rows ?? []).map((r) => String(r.month_value));
+      setSalesMonths(months);
+    })();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  // 2) Descuentos financieros (catálogo pequeño)
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("financial_discounts")
+        .select("id, label, percentage")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error("financial_discounts", error);
+        return;
+      }
+      setFinancialDiscounts((data ?? []).map((r) => ({
+        id: r.id, label: r.label, percentage: Number(r.percentage ?? 0),
+      })));
+    })();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  // 3) Dashboard completo (1 RPC)
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const PAGE = 1000;
-      const { from: fromDate, to: toDate } = getMonthBounds(salesMonth);
-      const baseSelect = "id, sale_date, year, month, day, vendedor, dependencia, tercero, referencia, cantidad, valor_total, precio_unitario";
-      const buildQuery = (from: number, to: number, withCount = false) => {
-        let q = supabase
-          .from("sales")
-          .select(baseSelect, withCount ? { count: "exact" } : undefined)
-          .order("sale_date", { ascending: true })
-          .range(from, to);
-        q = q.gte("sale_date", fromDate).lte("sale_date", toDate);
-        return q;
-      };
-      const first = await buildQuery(0, PAGE - 1, true);
-      if (first.error) {
-        console.error("Error loading sales", first.error);
-        if (!cancelled) {
-          setLoading(false);
-          setHasLoadedOnce(true);
-        }
+      const vendedoresArr = vendedoresKey ? vendedoresKey.split("|") : null;
+      const dependenciasArr = dependenciasKey ? dependenciasKey.split("|") : null;
+      const tercerosArr = tercerosKey ? tercerosKey.split("|") : null;
+      const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
+        p_sales_month: salesMonth,
+        p_cost_month: toCostMonthDate(costPeriodMonth),
+        p_op_month: toCostMonthDate(opPeriodMonth),
+        p_financial_pct: financialDiscountPct,
+        p_vendedores: vendedoresArr,
+        p_dependencias: dependenciasArr,
+        p_terceros: tercerosArr,
+      });
+      if (cancelled) return;
+      if (error) {
+        console.error("get_sales_dashboard", error);
+        setLoading(false);
+        setHasLoadedOnce(true);
         return;
       }
-      const total = first.count ?? (first.data?.length ?? 0);
-      const all: SaleRow[] = [...((first.data ?? []) as SaleRow[])];
-      if (total > PAGE) {
-        const ranges: Array<[number, number]> = [];
-        for (let from = PAGE; from < total; from += PAGE) {
-          ranges.push([from, Math.min(from + PAGE - 1, total - 1)]);
-        }
-        const results = await Promise.all(ranges.map(([f, t]) => buildQuery(f, t)));
-        for (const r of results) {
-          if (r.error) {
-            console.error("Error loading sales page", r.error);
-            continue;
-          }
-          all.push(...((r.data ?? []) as SaleRow[]));
-        }
-      }
-      if (cancelled) return;
-      setSalesRows(all);
-      if (all.length > 0) setHasAnySales(true);
+      const j = (json ?? {}) as Record<string, unknown>;
+      const next: DashboardData = {
+        kpis: { ...EMPTY_KPIS, ...(j.kpis as Partial<DashboardKpis> ?? {}) } as DashboardKpis,
+        monthlySeries: (j.monthlySeries as MonthlySeries[]) ?? [],
+        dailySeries: (j.dailySeries as DailySeries[]) ?? [],
+        rankings: (j.rankings as DashboardData["rankings"]) ?? EMPTY_DATA.rankings,
+        uniques: (j.uniques as DashboardData["uniques"]) ?? EMPTY_DATA.uniques,
+        operationalBreakdown: (j.operationalBreakdown as OperationalBreakdownItem[]) ?? [],
+        ctuMapSize: Number(j.ctuMapSize ?? 0),
+        hasAnySales: Boolean(j.hasAnySales),
+      };
+      setData(next);
       setLoading(false);
       setHasLoadedOnce(true);
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [salesMonth, refreshKey]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { count } = await supabase
-        .from("sales")
-        .select("id", { count: "exact", head: true });
-      if (!cancelled) setHasAnySales((count ?? 0) > 0);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const PAGE = 1000;
-      const months: string[] = [];
-      let from = 0;
-      let keepGoing = true;
-      while (keepGoing) {
-        const { data, error } = await supabase
-          .from("sales")
-          .select("year, month")
-          .order("year", { ascending: false })
-          .order("month", { ascending: false })
-          .range(from, from + PAGE - 1);
-        if (error) {
-          console.error("Error loading sales months", error);
-          break;
-        }
-        const batch = data ?? [];
-        for (const row of batch) {
-          const year = Number(row.year);
-          const month = Number(row.month);
-          if (!Number.isFinite(year) || !Number.isFinite(month)) continue;
-          months.push(`${year}-${String(month).padStart(2, "0")}-01`);
-        }
-        if (batch.length < PAGE) keepGoing = false;
-        else from += PAGE;
-      }
-      if (!cancelled) setSalesMonths(sortMonthsDesc(months));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("financial_discounts" as never)
-        .select("id, label, percentage, sort_order, is_active")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (error) {
-        console.error("Error loading financial discounts", error);
-        return;
-      }
-      if (cancelled) return;
-      const rows = ((data ?? []) as Array<{
-        id: string;
-        label: string;
-        percentage: number | string;
-      }>).map((row) => ({
-        id: row.id,
-        label: row.label,
-        percentage: Number(row.percentage ?? 0),
-      }));
-      setFinancialDiscounts(rows);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const map = new Map<string, number>();
-      const zeros = new Set<string>();
-      const PAGE = 1000;
-      let from = 0;
-      let keepGoing = true;
-      while (keepGoing) {
-        const { data, error } = await supabase
-          .from("product_costs")
-          .select("referencia, ctu")
-          .eq("period_month", costPeriodMonth)
-          .range(from, from + PAGE - 1);
-        if (error) {
-          console.error("Error loading product_costs", error);
-          break;
-        }
-        const batch = data ?? [];
-        for (const r of batch) {
-          if (r.ctu !== null && r.ctu !== undefined) {
-            const v = Number(r.ctu);
-            if (v > 0) {
-              map.set(r.referencia, v);
-            } else {
-              zeros.add(r.referencia);
-            }
-          }
-        }
-        if (batch.length < PAGE) keepGoing = false;
-        else from += PAGE;
-      }
-      if (!cancelled) {
-        setCtuMap(map);
-        setZeroCostSet(zeros);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [costPeriodMonth]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("operational_costs")
-        .select("percentage, cost_center_id, cost_centers!inner(id, name, is_active)")
-        .eq("period_month", opPeriodMonth);
-      if (error) {
-        const { data: simple } = await supabase
-          .from("operational_costs")
-          .select("percentage")
-          .eq("period_month", opPeriodMonth);
-        if (!cancelled) {
-          const sum = (simple ?? []).reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
-          setPctOperacional(sum);
-          setOperationalBreakdown([]);
-        }
-        return;
-      }
-      if (!cancelled) {
-        const rows = (data ?? []) as Array<{
-          cost_center_id: string;
-          percentage: number | string | null;
-          cost_centers?: { id: string; name: string; is_active: boolean } | { id: string; name: string; is_active: boolean }[] | null;
-        }>;
-        const sum = rows.reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
-        const breakdown = rows
-          .map((row) => {
-            const center = Array.isArray(row.cost_centers) ? row.cost_centers[0] : row.cost_centers;
-            return {
-              id: row.cost_center_id,
-              name: center?.name ?? "Centro sin nombre",
-              percentage: Number(row.percentage ?? 0),
-            };
-          })
-          .sort((a, b) => b.percentage - a.percentage);
-        setPctOperacional(sum);
-        setOperationalBreakdown(breakdown);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [opPeriodMonth]);
-
-  const filteredRows = React.useMemo<AnalyticsRow[]>(() => {
-    const vSet = new Set(filters.vendedores);
-    const dSet = new Set(filters.dependencias);
-    const tSet = new Set(filters.terceros);
-    const discountFactor = 1 - financialDiscountPct / 100;
-    return salesRows
-      .filter((r) => (vSet.size ? vSet.has(r.vendedor ?? "") : true))
-      .filter((r) => (dSet.size ? dSet.has(r.dependencia ?? "") : true))
-      .filter((r) => (tSet.size ? tSet.has(r.tercero ?? "") : true))
-      .map((r) => {
-        const ctu = ctuMap.get(r.referencia) ?? null;
-        const costoCero = ctu === null && zeroCostSet.has(r.referencia);
-        const sinCosto = ctu === null && !costoCero;
-        const computable = ctu !== null;
-        const valorBruto = Number(r.valor_total);
-        const valorNeto = valorBruto * discountFactor;
-        const precioUnitarioBruto = r.precio_unitario === null ? null : Number(r.precio_unitario);
-        const precioUnitarioNeto = precioUnitarioBruto === null ? null : precioUnitarioBruto * discountFactor;
-        const costoLinea = computable ? (ctu as number) * Number(r.cantidad) : 0;
-        const margenUnitario = computable && precioUnitarioNeto !== null ? precioUnitarioNeto - (ctu as number) : null;
-        const margenBruto = computable ? valorNeto - costoLinea : 0;
-        const margenPct =
-          computable && valorNeto !== 0
-            ? (margenBruto / valorNeto) * 100
-            : null;
-        return {
-          ...r,
-          ctu,
-          costoLinea,
-          valorNeto,
-          precioUnitarioNeto,
-          margenUnitario,
-          margenBruto,
-          margenPct,
-          costoCero,
-          sinCosto,
-          computable,
-        };
-      });
-  }, [salesRows, ctuMap, zeroCostSet, filters, financialDiscountPct]);
-
-  const kpis = React.useMemo(() => {
-    let ventas = 0;
-    let costo = 0;
-    let margenBruto = 0;
-    let ventasComputables = 0;
-    let lineasExcluidas = 0;
-    let ventasExcluidas = 0;
-    let lineasCostoCero = 0;
-    let lineasSinCosto = 0;
-    const productos = new Set<string>();
-    const clientes = new Set<string>();
-    const vendedores = new Set<string>();
-
-    for (const r of filteredRows) {
-      ventas += Number(r.valor_total);
-      if (r.computable) {
-        ventasComputables += Number(r.valor_total);
-        costo += r.costoLinea;
-        margenBruto += r.margenBruto;
-      } else {
-        lineasExcluidas++;
-        ventasExcluidas += Number(r.valor_total);
-        if (r.costoCero) lineasCostoCero++;
-        if (r.sinCosto) lineasSinCosto++;
-      }
-      productos.add(r.referencia);
-      if (r.tercero) clientes.add(r.tercero);
-      if (r.vendedor) vendedores.add(r.vendedor);
-    }
-
-    const descuentoFinancieroMonto = ventasComputables * (financialDiscountPct / 100);
-    const ventasNetas = ventasComputables - descuentoFinancieroMonto;
-    const utilidad = margenBruto;
-    const operacionalMonto = ventasNetas * (pctOperacional / 100);
-    const utilidadOperacional = margenBruto - operacionalMonto;
-    const margenPct = ventasNetas !== 0 ? (margenBruto / ventasNetas) * 100 : 0;
-    const utilidadOperacionalPct = ventasNetas !== 0 ? (utilidadOperacional / ventasNetas) * 100 : 0;
-
-    return {
-      ventas,
-      ventasComputables,
-      costo,
-      margenBruto,
-      margenPct,
-      pctOperacional,
-      operacionalMonto,
-      descuentoFinancieroPct: financialDiscountPct,
-      descuentoFinancieroMonto,
-      ventasNetas,
-      utilidad,
-      utilidadOperacional,
-      utilidadOperacionalPct,
-      productos: productos.size,
-      clientes: clientes.size,
-      vendedores: vendedores.size,
-      lineas: filteredRows.length,
-      lineasExcluidas,
-      ventasExcluidas,
-      lineasCostoCero,
-      lineasSinCosto,
-    };
-  }, [filteredRows, financialDiscountPct, pctOperacional]);
-
-  const monthlySeries = React.useMemo<MonthlySeries[]>(() => {
-    const map = new Map<string, MonthlySeries>();
-    for (const r of filteredRows) {
-      if (!r.computable) continue;
-      const key = `${r.year}-${String(r.month).padStart(2, "0")}`;
-      const existing = map.get(key) ?? {
-        month: key,
-        label: fmtMonthShort(r.year, r.month),
-        ventas: 0,
-        ventasNetas: 0,
-        costo: 0,
-        margen: 0,
-      };
-      existing.ventas += Number(r.valor_total);
-      existing.ventasNetas += r.valorNeto;
-      existing.costo += r.costoLinea;
-      existing.margen += r.margenBruto;
-      map.set(key, existing);
-    }
-    return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
-  }, [filteredRows]);
-
-  const dailySeries = React.useMemo<DailySeries[]>(() => {
-    const map = new Map<string, DailySeries>();
-    for (const r of filteredRows) {
-      const key = r.sale_date;
-      const existing = map.get(key) ?? {
-        day: key,
-        label: `${String(r.day).padStart(2, "0")}/${String(r.month).padStart(2, "0")}`,
-        ventas: 0,
-      };
-      existing.ventas += Number(r.valor_total);
-      map.set(key, existing);
-    }
-    return Array.from(map.values()).sort((a, b) => a.day.localeCompare(b.day));
-  }, [filteredRows]);
-
-  const buildRanking = React.useCallback(
-    (getKey: (r: AnalyticsRow) => string | null | undefined): RankingItem[] => {
-      const map = new Map<string, RankingItem>();
-      for (const r of filteredRows) {
-        if (!r.computable) continue;
-        const k = getKey(r);
-        if (!k) continue;
-        const existing = map.get(k) ?? {
-          key: k,
-          ventas: 0,
-          ventasNetas: 0,
-          costo: 0,
-          margenBruto: 0,
-          margenPct: 0,
-          cantidad: 0,
-        };
-        existing.ventas += Number(r.valor_total);
-        existing.ventasNetas += r.valorNeto;
-        existing.costo += r.costoLinea;
-        existing.margenBruto += r.margenBruto;
-        existing.cantidad += Number(r.cantidad);
-        map.set(k, existing);
-      }
-      const arr = Array.from(map.values()).map((x) => ({
-        ...x,
-        margenPct: x.ventasNetas !== 0 ? (x.margenBruto / x.ventasNetas) * 100 : 0,
-      }));
-      arr.sort((a, b) => b.margenBruto - a.margenBruto);
-      return arr;
-    },
-    [filteredRows],
-  );
-
-  const rankings = React.useMemo(() => {
-    return {
-      vendedores: buildRanking((r) => r.vendedor).slice(0, 10),
-      dependencias: buildRanking((r) => r.dependencia).slice(0, 10),
-      terceros: buildRanking((r) => r.tercero).slice(0, 10),
-      productos: buildRanking((r) => r.referencia).slice(0, 10),
-    };
-  }, [buildRanking]);
-
-  const uniques = React.useMemo(() => {
-    const v = new Set<string>();
-    const d = new Set<string>();
-    const t = new Set<string>();
-    for (const r of salesRows) {
-      if (r.vendedor) v.add(r.vendedor);
-      if (r.dependencia) d.add(r.dependencia);
-      if (r.tercero) t.add(r.tercero);
-    }
-    return {
-      vendedores: Array.from(v).sort(),
-      dependencias: Array.from(d).sort(),
-      terceros: Array.from(t).sort(),
-    };
-  }, [salesRows]);
-
-  const excludedRows = React.useMemo(
-    () => filteredRows.filter((row) => !row.computable),
-    [filteredRows],
-  );
+    return () => { cancelled = true; };
+  }, [salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, vendedoresKey, dependenciasKey, tercerosKey, refreshKey]);
 
   return {
     loading,
     hasLoadedOnce,
-    hasAnySales,
+    hasAnySales: data.hasAnySales,
     salesMonths,
     financialDiscounts,
-    pctOperacional,
-    operationalBreakdown,
-    salesRows,
-    filteredRows,
-    kpis,
-    monthlySeries,
-    dailySeries,
-    rankings,
-    uniques,
-    excludedRows,
-    ctuMapSize: ctuMap.size,
-    zeroCostCount: zeroCostSet.size,
+    pctOperacional: data.kpis.pctOperacional,
+    operationalBreakdown: data.operationalBreakdown,
+    kpis: data.kpis,
+    monthlySeries: data.monthlySeries,
+    dailySeries: data.dailySeries,
+    rankings: data.rankings,
+    uniques: data.uniques,
+    ctuMapSize: data.ctuMapSize,
   };
+}
+
+// =====================================================================
+// Hook independiente para la tabla detalle (paginada server-side)
+// =====================================================================
+
+export interface DetailRow {
+  id: string;
+  sale_date: string;
+  year: number;
+  month: number;
+  day: number;
+  vendedor: string | null;
+  dependencia: string | null;
+  tercero: string | null;
+  referencia: string;
+  cantidad: number;
+  valor_total: number;
+  precio_unitario: number | null;
+  ctu: number | null;
+  precioUnitarioNeto: number | null;
+  margenUnitario: number | null;
+  margenPct: number | null;
+}
+
+export interface UseSalesDetailArgs {
+  salesMonth: string;
+  costPeriodMonth: string;
+  financialDiscountPct: number;
+  filters: { vendedores: string[]; dependencias: string[]; terceros: string[] };
+  search: string;
+  sortKey: string;
+  sortDir: "asc" | "desc";
+  limit?: number;
+  refreshKey: number;
+  enabled?: boolean;
+}
+
+export function useSalesDetail(args: UseSalesDetailArgs) {
+  const {
+    salesMonth, costPeriodMonth, financialDiscountPct,
+    filters, search, sortKey, sortDir,
+    limit = 500, refreshKey, enabled = true,
+  } = args;
+
+  const [rows, setRows] = React.useState<DetailRow[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [loading, setLoading] = React.useState(false);
+
+  const vendedoresKey = filters.vendedores.join("|");
+  const dependenciasKey = filters.dependencias.join("|");
+  const tercerosKey = filters.terceros.join("|");
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    setLoading(true);
+    const handle = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("get_sales_detail", {
+        p_sales_month: salesMonth,
+        p_cost_month: costPeriodMonth,
+        p_financial_pct: financialDiscountPct,
+        p_vendedores: vendedoresKey ? vendedoresKey.split("|") : null,
+        p_dependencias: dependenciasKey ? dependenciasKey.split("|") : null,
+        p_terceros: tercerosKey ? tercerosKey.split("|") : null,
+        p_search: search || null,
+        p_sort_key: sortKey,
+        p_sort_dir: sortDir,
+        p_offset: 0,
+        p_limit: limit,
+      });
+      if (cancelled) return;
+      if (error) {
+        console.error("get_sales_detail", error);
+        setLoading(false);
+        return;
+      }
+      const j = (data ?? {}) as { rows?: DetailRow[]; total?: number };
+      setRows((j.rows ?? []).map((r) => ({
+        ...r,
+        cantidad: Number(r.cantidad),
+        valor_total: Number(r.valor_total),
+        precio_unitario: r.precio_unitario === null ? null : Number(r.precio_unitario),
+        ctu: r.ctu === null ? null : Number(r.ctu),
+        precioUnitarioNeto: r.precioUnitarioNeto === null ? null : Number(r.precioUnitarioNeto),
+        margenUnitario: r.margenUnitario === null ? null : Number(r.margenUnitario),
+        margenPct: r.margenPct === null ? null : Number(r.margenPct),
+      })));
+      setTotal(Number(j.total ?? 0));
+      setLoading(false);
+    }, 250); // debounce ligero para búsqueda y filtros
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [enabled, salesMonth, costPeriodMonth, financialDiscountPct, vendedoresKey, dependenciasKey, tercerosKey, search, sortKey, sortDir, limit, refreshKey]);
+
+  return { rows, total, loading };
 }
