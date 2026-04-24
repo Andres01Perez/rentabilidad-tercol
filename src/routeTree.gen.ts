@@ -75,7 +75,9 @@ const AppCalculadoraRoute = AppCalculadoraRouteImport.update({
   id: '/calculadora',
   path: '/calculadora',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/calculadora.lazy').then((d) => d.Route),
+)
 const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
   id: '/analisis-ventas',
   path: '/analisis-ventas',
