@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatMonth, formatNumber, formatPercent } from "@/lib/period";
+import { currentMonthDate, formatCurrency, formatMonth, formatNumber, formatPercent, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import { StepCard } from "./StepCard";
 import { MultiMonthPicker } from "./MultiMonthPicker";
