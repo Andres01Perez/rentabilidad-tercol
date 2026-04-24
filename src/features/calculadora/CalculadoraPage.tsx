@@ -607,7 +607,9 @@ export function CalculadoraPage() {
 
           <RentabilidadTable
             rows={result.rows}
-            onExport={() => exportRentabilidadExcel(result)}
+            onExport={() => {
+              void exportRentabilidadExcel(result);
+            }}
           />
 
           <RentabilidadCharts rows={result.rows} />

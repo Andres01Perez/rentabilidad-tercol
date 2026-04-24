@@ -1,4 +1,13 @@
-import * as XLSX from "xlsx";
+type XlsxModule = typeof import("xlsx");
+
+let xlsxPromise: Promise<XlsxModule> | null = null;
+
+async function loadXlsx() {
+  if (!xlsxPromise) {
+    xlsxPromise = import("xlsx");
+  }
+  return xlsxPromise;
+}
 
 /** Normalize a header: lowercase, strip accents, collapse spaces. */
 function normalize(s: string): string {
@@ -32,6 +41,7 @@ export async function parseExcel<TKey extends string>(
     numericKeys?: TKey[];
   },
 ): Promise<ParsedExcelResult<TKey>> {
+  const XLSX = await loadXlsx();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const firstSheet = wb.SheetNames[0];
@@ -126,6 +136,7 @@ export async function parseExcelSheets(
   file: File,
   previewRows = 30,
 ): Promise<SheetPreview[]> {
+  const XLSX = await loadXlsx();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   return wb.SheetNames.map((name) => {
@@ -187,6 +198,7 @@ export async function parseExcelWithMapping<TKey extends string>(
   file: File,
   options: MappingOptions<TKey>,
 ): Promise<ParsedExcelResult<TKey>> {
+  const XLSX = await loadXlsx();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[options.sheetName];

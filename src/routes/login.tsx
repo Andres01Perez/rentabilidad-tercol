@@ -15,6 +15,7 @@ import { ArrowRight, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Iniciar sesión — Tercol" },

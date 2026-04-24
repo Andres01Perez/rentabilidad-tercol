@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NegociacionesPage } from "@/features/negociaciones/NegociacionesPage";
 
 export const Route = createFileRoute("/_app/negociaciones")({
   head: () => ({
@@ -8,5 +7,4 @@ export const Route = createFileRoute("/_app/negociaciones")({
       { name: "description", content: "Crea cotizaciones y negociaciones con referencias, cantidades y precios." },
     ],
   }),
-  component: NegociacionesPage,
 });

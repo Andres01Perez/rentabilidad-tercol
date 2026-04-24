@@ -1,14 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { LayoutDashboard } from "lucide-react";
 import { PagePlaceholder } from "@/components/layout/PagePlaceholder";
 
-export const Route = createFileRoute("/_app/dashboard")({
-  head: () => ({
-    meta: [
-      { title: "Dashboard — Tercol" },
-      { name: "description", content: "Resumen ejecutivo de rentabilidad, ventas y costos en Tercol." },
-    ],
-  }),
+export const Route = createLazyFileRoute("/_app/dashboard")({
+  component: DashboardPage,
 });
 
 function DashboardPage() {

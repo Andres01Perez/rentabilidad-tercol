@@ -494,41 +494,7 @@ export function AnalisisVentasPage() {
     setSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
   }, [analytics.salesMonths]);
 
-  const filteredCount = React.useMemo(() => {
-    const q = deferredSearch.trim().toLowerCase();
-    const numFilters = {
-      cantidad: parseNumFilter(colFilters.cantidad),
-      precio_unitario: parseNumFilter(colFilters.precio_unitario),
-      ctu: parseNumFilter(colFilters.ctu),
-      margenU: parseNumFilter(colFilters.margenU),
-      margenPct: parseNumFilter(colFilters.margenPct),
-    };
-    let count = 0;
-    for (const r of analytics.filteredRows) {
-      if (q) {
-        const hit =
-          (r.referencia ?? "").toLowerCase().includes(q) ||
-          (r.tercero ?? "").toLowerCase().includes(q) ||
-          (r.vendedor ?? "").toLowerCase().includes(q);
-        if (!hit) continue;
-      }
-      if (!matchTextFilter(r.sale_date, colFilters.sale_date)) continue;
-      if (!matchTextFilter(r.vendedor, colFilters.vendedor)) continue;
-      if (!matchTextFilter(r.dependencia, colFilters.dependencia)) continue;
-      if (!matchTextFilter(r.tercero, colFilters.tercero)) continue;
-      if (!matchTextFilter(r.referencia, colFilters.referencia)) continue;
-      if (!matchNumFilter(Number(r.cantidad), numFilters.cantidad)) continue;
-      if (!matchNumFilter(r.precio_unitario, numFilters.precio_unitario)) continue;
-      if (!matchNumFilter(r.ctu, numFilters.ctu)) continue;
-      const margenU = (r.precio_unitario ?? 0) - (r.ctu ?? 0);
-      if (!matchNumFilter(margenU, numFilters.margenU)) continue;
-      if (!matchNumFilter(r.margenPct, numFilters.margenPct)) continue;
-      count++;
-    }
-    return count;
-  }, [analytics.filteredRows, deferredSearch, colFilters]);
-
-  const detailRows = React.useMemo(() => {
+  const detailState = React.useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
       cantidad: parseNumFilter(colFilters.cantidad),
@@ -595,8 +561,14 @@ export function AnalisisVentasPage() {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv)) * dir;
     });
-    return sorted.slice(0, 2000);
+    return {
+      filteredCount: filtered.length,
+      detailRows: sorted.slice(0, 2000),
+    };
   }, [analytics.filteredRows, deferredSearch, colFilters, sortKey, sortDir]);
+
+  const filteredCount = detailState.filteredCount;
+  const detailRows = detailState.detailRows;
 
   const hasAnyColFilter = React.useMemo(
     () => Object.values(colFilters).some((v) => v.trim() !== ""),

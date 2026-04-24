@@ -40,12 +40,16 @@ const AppNegociacionesRoute = AppNegociacionesRouteImport.update({
   id: '/negociaciones',
   path: '/negociaciones',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/negociaciones.lazy').then((d) => d.Route),
+)
 const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
   id: '/listas-precios',
   path: '/listas-precios',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/listas-precios.lazy').then((d) => d.Route),
+)
 const AppHistorialRoute = AppHistorialRouteImport.update({
   id: '/historial',
   path: '/historial',
@@ -55,17 +59,23 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/dashboard.lazy').then((d) => d.Route),
+)
 const AppCostosProductosRoute = AppCostosProductosRouteImport.update({
   id: '/costos-productos',
   path: '/costos-productos',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/costos-productos.lazy').then((d) => d.Route),
+)
 const AppCostosOperacionalesRoute = AppCostosOperacionalesRouteImport.update({
   id: '/costos-operacionales',
   path: '/costos-operacionales',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/costos-operacionales.lazy').then((d) => d.Route),
+)
 const AppConfiguracionesRoute = AppConfiguracionesRouteImport.update({
   id: '/configuraciones',
   path: '/configuraciones',
@@ -75,7 +85,9 @@ const AppCalculadoraRoute = AppCalculadoraRouteImport.update({
   id: '/calculadora',
   path: '/calculadora',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/calculadora.lazy').then((d) => d.Route),
+)
 const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
   id: '/analisis-ventas',
   path: '/analisis-ventas',

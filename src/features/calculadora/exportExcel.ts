@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import type { RentabilidadRow, OpMonthInfo, SourceOption, SourceKind } from "./useCalculadora";
 import { formatMonth } from "@/lib/period";
 
@@ -10,13 +9,14 @@ interface ExportArgs {
   avgOpPct: number;
 }
 
-export function exportRentabilidadExcel({
+export async function exportRentabilidadExcel({
   rows,
   source,
   costMonths,
   opMonths,
   avgOpPct,
 }: ExportArgs) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   // Hoja 1: Rentabilidad
