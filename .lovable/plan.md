@@ -1,67 +1,45 @@
-## Objetivo
-Quitar el error persistente `Minified React error #284` en `/calculadora` y `/analisis-ventas`, dejando ambas vistas estables, simples y funcionales.
+## Plan de implementación
 
-## Diagnóstico
-El problema no parece venir de tu lógica de negocio sino de la capa de gráficos.
+1. Simplificar el filtro principal de `/analisis-ventas`
+- Reemplazar el `DateRangePicker` por un selector de mes único.
+- Construir la lista de meses a partir de las ventas realmente cargadas en la tabla `sales`, para que el usuario elija solo entre meses con información.
+- Dejar ese filtro como criterio principal de consulta, usando el mes completo seleccionado de forma automática.
 
-Los dos módulos que fallan comparten `recharts`:
-- `src/features/analisis-ventas/AnalisisVentasPage.tsx`
-- `src/features/calculadora/RentabilidadCharts.tsx`
+2. Ajustar la lógica de carga en `useSalesAnalytics`
+- Cambiar el parámetro `range` por un `salesMonth` (formato `YYYY-MM-01`).
+- Convertir internamente ese mes en rango completo de fechas (`desde el día 1 hasta el último día del mes`) para seguir consultando `sale_date` sin cambiar la estructura de la tabla.
+- Exponer también el catálogo de meses disponibles en ventas para alimentar el nuevo selector del frontend.
 
-Además, encontré una inconsistencia de dependencias:
-- `package.json` declara `recharts: ^3.0.0`
-- `package-lock.json` sigue bloqueando `recharts: 2.15.4`
+3. Actualizar la UI de `/analisis-ventas`
+- Quitar la complejidad de selección por rango y mostrar un control simple de “Mes de ventas”.
+- Mantener los selectores actuales de “Mes de costos” y “Mes operacional”, pero con valor por defecto en el mes anterior al actual.
+- Si el mes anterior no existe en el catálogo de costos u operacionales, usar el mes más reciente disponible para evitar estados vacíos innecesarios.
 
-Y la documentación pública de Recharts muestra historial de problemas de compatibilidad/render con React 19 y `ResponsiveContainer`. Eso encaja con tu error de `ref` inválido.
+4. Ajustar defaults en la calculadora
+- Cambiar la selección inicial de meses en `CalculadoraPage` para que:
+  - costos de producto arranquen con el mes anterior,
+  - costos operacionales arranquen con el mes anterior.
+- Mantener la selección múltiple actual para que el usuario todavía pueda cambiar o agregar otros meses manualmente.
+- Aplicar la misma regla de fallback: si el mes anterior no existe en el catálogo, preseleccionar el más reciente disponible.
 
-## Plan
-1. **Normalizar dependencias para evitar mezcla de versiones**
-   - Alinear `package.json` y lockfile para que la versión real instalada sea consistente.
-   - Verificar si conviene dejar `recharts` en una versión realmente compatible o retirarlo del flujo crítico.
-
-2. **Eliminar la fuente del error en ambas páginas**
-   - Quitar la dependencia de `ResponsiveContainer`/Recharts de `/analisis-ventas` y `/calculadora`.
-   - Reemplazar los gráficos por componentes simples hechos con HTML/CSS/SVG nativo de React.
-   - Mantener visualizaciones útiles, pero sin librerías que manejen refs internamente.
-
-3. **Conservar valor funcional de ambas vistas**
-   - En `/analisis-ventas`: mantener KPIs, tabla, filtros, ordenamiento e insights visuales sencillos.
-   - En `/calculadora`: mantener cálculo, tabla completa, exportación a Excel y gráficos/insights simples y estables.
-
-4. **Aplicar una capa de fallback segura**
-   - Si no hay datos, mostrar estados vacíos claros.
-   - Si hay datos parciales, renderizar tablas/resúmenes sin intentar montar componentes frágiles.
-   - Evitar cualquier patrón que dependa de refs complejos o medición automática del contenedor.
-
-5. **Revisar los puntos exactos donde hoy se rompe**
-   - `src/features/analisis-ventas/AnalisisVentasPage.tsx` — charts de línea y barras.
-   - `src/features/calculadora/RentabilidadCharts.tsx` — barras, distribución y scatter.
-   - `src/features/calculadora/CalculadoraPage.tsx` — montaje condicional del bloque de resultados.
+5. Alinear defaults en módulos de mantenimiento
+- Cambiar `CostosProductosPage` para que abra por defecto en el mes anterior en vez del mes actual.
+- Cambiar `CostosOperacionalesPage` para que abra por defecto en el mes anterior en vez del mes actual.
+- Conservar `MonthSelect` tal como está, solo cambiando el valor inicial.
 
 ## Resultado esperado
-- Desaparece el error React #284.
-- `/calculadora` vuelve a calcular correctamente al hacer clic en el botón.
-- `/analisis-ventas` deja de romperse por los gráficos.
-- La app queda más simple, más nativa y más estable.
+- En análisis de ventas el usuario escogerá un mes, no un rango arbitrario.
+- Costos y costos operacionales arrancarán automáticamente en el mes anterior, que es el comportamiento real de uso.
+- La navegación será más rápida y con menos fricción porque habrá menos decisiones manuales al entrar a cada módulo.
 
 ## Detalles técnicos
-Implementaré un reemplazo con componentes propios, por ejemplo:
-- barras horizontales con `div` + widths en `%`
-- histogramas simples con `div`/CSS grid
-- dispersión simplificada con SVG nativo
-- tarjetas de insight cuando el gráfico no aporte más que una tabla resumida
-
-Esto evita:
-- refs internos de terceros
-- `ResponsiveContainer`
-- dependencias frágiles frente a React 19
-
-## Archivos a tocar
-- `package.json`
-- `package-lock.json` si hace falta normalizarlo
-- `src/features/analisis-ventas/AnalisisVentasPage.tsx`
-- `src/features/calculadora/RentabilidadCharts.tsx`
-- posiblemente `src/features/calculadora/CalculadoraPage.tsx`
-
-## Entrega
-Haré una corrección enfocada en estabilidad primero, no en sofisticación visual. La prioridad será que funcione bien todos los días, sin seguir atrapados en este error.
+- Archivos principales a tocar:
+  - `src/features/analisis-ventas/AnalisisVentasPage.tsx`
+  - `src/features/analisis-ventas/useSalesAnalytics.ts`
+  - `src/features/calculadora/CalculadoraPage.tsx`
+  - `src/features/costos-productos/CostosProductosPage.tsx`
+  - `src/features/costos-operacionales/CostosOperacionalesPage.tsx`
+- Helpers reutilizables:
+  - `previousMonth(currentMonthDate())` para el default base.
+  - fallback al primer mes disponible cuando el default no exista en la data.
+- No hace falta cambiar base de datos ni estructura de tablas; es un ajuste de estado inicial, consulta y experiencia de uso.
