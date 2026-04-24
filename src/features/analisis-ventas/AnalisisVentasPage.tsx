@@ -46,6 +46,14 @@ import { UploadVentasDialog } from "./UploadVentasDialog";
 import { currentMonthDate, formatCurrency, formatNumber, formatPercent } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
+/** Default range = mes en curso (reduce ~10x el payload inicial). */
+function defaultMonthRange(): DateRange {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from, to };
+}
+
 function KpiCard({
   icon: Icon,
   label,
@@ -375,7 +383,9 @@ function FilterCell({
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const [range, setRange] = React.useState<DateRange>({ from: null, to: null });
+  // Por defecto cargamos solo el mes actual para que el dashboard sea casi
+  // instantáneo. El usuario puede ampliar el rango si quiere histórico.
+  const [range, setRange] = React.useState<DateRange>(() => defaultMonthRange());
   // Rango debounced (300ms) para evitar reconsultas en cascada al ajustar
   // dos fechas seguidas.
   const [debouncedRange, setDebouncedRange] = React.useState<DateRange>(range);
@@ -389,6 +399,9 @@ export function AnalisisVentasPage() {
   const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
   const [search, setSearch] = React.useState("");
+  // useDeferredValue para que el input de búsqueda no bloquee el render
+  // mientras se filtran/ordenan miles de filas.
+  const deferredSearch = React.useDeferredValue(search);
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [colFilters, setColFilters] = React.useState<ColFilters>({
@@ -417,7 +430,7 @@ export function AnalisisVentasPage() {
   });
 
   const filteredCount = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
       cantidad: parseNumFilter(colFilters.cantidad),
       precio_unitario: parseNumFilter(colFilters.precio_unitario),
@@ -448,10 +461,10 @@ export function AnalisisVentasPage() {
       count++;
     }
     return count;
-  }, [analytics.filteredRows, search, colFilters]);
+  }, [analytics.filteredRows, deferredSearch, colFilters]);
 
   const detailRows = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
       cantidad: parseNumFilter(colFilters.cantidad),
       precio_unitario: parseNumFilter(colFilters.precio_unitario),
@@ -518,7 +531,7 @@ export function AnalisisVentasPage() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return sorted.slice(0, 2000);
-  }, [analytics.filteredRows, search, colFilters, sortKey, sortDir]);
+  }, [analytics.filteredRows, deferredSearch, colFilters, sortKey, sortDir]);
 
   const hasAnyColFilter = React.useMemo(
     () => Object.values(colFilters).some((v) => v.trim() !== ""),
