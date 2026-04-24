@@ -293,7 +293,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     (async () => {
       const { data, error } = await supabase
         .from("operational_costs")
-        .select("percentage, cost_center_id, cost_centers!inner(is_active)")
+        .select("percentage, cost_center_id, cost_centers!inner(id, name, is_active)")
         .eq("period_month", opPeriodMonth);
       if (error) {
         const { data: simple } = await supabase
@@ -303,12 +303,29 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         if (!cancelled) {
           const sum = (simple ?? []).reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
           setPctOperacional(sum);
+          setOperationalBreakdown([]);
         }
         return;
       }
       if (!cancelled) {
-        const sum = (data ?? []).reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
+        const rows = (data ?? []) as Array<{
+          cost_center_id: string;
+          percentage: number | string | null;
+          cost_centers?: { id: string; name: string; is_active: boolean } | { id: string; name: string; is_active: boolean }[] | null;
+        }>;
+        const sum = rows.reduce((acc, r) => acc + Number(r.percentage ?? 0), 0);
+        const breakdown = rows
+          .map((row) => {
+            const center = Array.isArray(row.cost_centers) ? row.cost_centers[0] : row.cost_centers;
+            return {
+              id: row.cost_center_id,
+              name: center?.name ?? "Centro sin nombre",
+              percentage: Number(row.percentage ?? 0),
+            };
+          })
+          .sort((a, b) => b.percentage - a.percentage);
         setPctOperacional(sum);
+        setOperationalBreakdown(breakdown);
       }
     })();
     return () => {
