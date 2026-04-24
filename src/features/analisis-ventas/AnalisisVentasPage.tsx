@@ -835,13 +835,6 @@ export function AnalisisVentasPage() {
               valueClassName="text-2xl md:text-3xl"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
-            <KpiCard icon={ShoppingCart} label="Productos" value={formatNumber(analytics.kpis.productos)} />
-            <KpiCard icon={Users} label="Clientes" value={formatNumber(analytics.kpis.clientes)} />
-            <KpiCard icon={UserCheck} label="Vendedores" value={formatNumber(analytics.kpis.vendedores)} />
-            <KpiCard icon={Building2} label="Dependencias" value={formatNumber(analytics.uniques.dependencias.length)} />
-          </div>
-
           {/* Series temporales */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="glass rounded-2xl border border-border/60 p-5">
