@@ -19,6 +19,9 @@ export interface SaleRow {
 export interface AnalyticsRow extends SaleRow {
   ctu: number | null;
   costoLinea: number;
+  valorNeto: number;
+  precioUnitarioNeto: number | null;
+  margenUnitario: number | null;
   margenBruto: number;
   margenPct: number | null;
   /** true si la referencia tiene registro de costo pero es <= 0 */
@@ -32,6 +35,7 @@ export interface AnalyticsRow extends SaleRow {
 export interface RankingItem {
   key: string;
   ventas: number;
+  ventasNetas: number;
   costo: number;
   margenBruto: number;
   margenPct: number;
@@ -42,6 +46,7 @@ export interface MonthlySeries {
   month: string;
   label: string;
   ventas: number;
+  ventasNetas: number;
   costo: number;
   margen: number;
 }
@@ -337,6 +342,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     const vSet = new Set(filters.vendedores);
     const dSet = new Set(filters.dependencias);
     const tSet = new Set(filters.terceros);
+    const discountFactor = 1 - financialDiscountPct / 100;
     return salesRows
       .filter((r) => (vSet.size ? vSet.has(r.vendedor ?? "") : true))
       .filter((r) => (dSet.size ? dSet.has(r.dependencia ?? "") : true))
@@ -346,16 +352,24 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         const costoCero = ctu === null && zeroCostSet.has(r.referencia);
         const sinCosto = ctu === null && !costoCero;
         const computable = ctu !== null;
+        const valorBruto = Number(r.valor_total);
+        const valorNeto = valorBruto * discountFactor;
+        const precioUnitarioBruto = r.precio_unitario === null ? null : Number(r.precio_unitario);
+        const precioUnitarioNeto = precioUnitarioBruto === null ? null : precioUnitarioBruto * discountFactor;
         const costoLinea = computable ? (ctu as number) * Number(r.cantidad) : 0;
-        const margenBruto = computable ? Number(r.valor_total) - costoLinea : 0;
+        const margenUnitario = computable && precioUnitarioNeto !== null ? precioUnitarioNeto - (ctu as number) : null;
+        const margenBruto = computable ? valorNeto - costoLinea : 0;
         const margenPct =
-          computable && Number(r.valor_total) !== 0
-            ? (margenBruto / Number(r.valor_total)) * 100
+          computable && valorNeto !== 0
+            ? (margenBruto / valorNeto) * 100
             : null;
         return {
           ...r,
           ctu,
           costoLinea,
+          valorNeto,
+          precioUnitarioNeto,
+          margenUnitario,
           margenBruto,
           margenPct,
           costoCero,
@@ -363,7 +377,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
           computable,
         };
       });
-  }, [salesRows, ctuMap, filters]);
+  }, [salesRows, ctuMap, zeroCostSet, filters, financialDiscountPct]);
 
   const kpis = React.useMemo(() => {
     let ventas = 0;
@@ -397,11 +411,11 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
 
     const descuentoFinancieroMonto = ventasComputables * (financialDiscountPct / 100);
     const ventasNetas = ventasComputables - descuentoFinancieroMonto;
-    const utilidad = ventasNetas - costo;
-    const operacionalMonto = ventas * (pctOperacional / 100);
-    const utilidadOperacional = utilidad - operacionalMonto;
-    const margenPct = ventasComputables !== 0 ? (margenBruto / ventasComputables) * 100 : 0;
-    const utilidadOperacionalPct = margenPct - pctOperacional;
+    const utilidad = margenBruto;
+    const operacionalMonto = ventasNetas * (pctOperacional / 100);
+    const utilidadOperacional = margenBruto - operacionalMonto;
+    const margenPct = ventasNetas !== 0 ? (margenBruto / ventasNetas) * 100 : 0;
+    const utilidadOperacionalPct = ventasNetas !== 0 ? (utilidadOperacional / ventasNetas) * 100 : 0;
 
     return {
       ventas,
@@ -437,10 +451,12 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         month: key,
         label: fmtMonthShort(r.year, r.month),
         ventas: 0,
+        ventasNetas: 0,
         costo: 0,
         margen: 0,
       };
       existing.ventas += Number(r.valor_total);
+      existing.ventasNetas += r.valorNeto;
       existing.costo += r.costoLinea;
       existing.margen += r.margenBruto;
       map.set(key, existing);
@@ -473,12 +489,14 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         const existing = map.get(k) ?? {
           key: k,
           ventas: 0,
+          ventasNetas: 0,
           costo: 0,
           margenBruto: 0,
           margenPct: 0,
           cantidad: 0,
         };
         existing.ventas += Number(r.valor_total);
+        existing.ventasNetas += r.valorNeto;
         existing.costo += r.costoLinea;
         existing.margenBruto += r.margenBruto;
         existing.cantidad += Number(r.cantidad);
@@ -486,7 +504,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       }
       const arr = Array.from(map.values()).map((x) => ({
         ...x,
-        margenPct: x.ventas !== 0 ? (x.margenBruto / x.ventas) * 100 : 0,
+        margenPct: x.ventasNetas !== 0 ? (x.margenBruto / x.ventasNetas) * 100 : 0,
       }));
       arr.sort((a, b) => b.margenBruto - a.margenBruto);
       return arr;
