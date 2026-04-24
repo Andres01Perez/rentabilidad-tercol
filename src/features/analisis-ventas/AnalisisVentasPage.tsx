@@ -8,9 +8,6 @@ import {
   PiggyBank,
   Percent,
   ShoppingCart,
-  Users,
-  Building2,
-  UserCheck,
   AlertTriangle,
   Filter,
   X,
@@ -20,6 +17,7 @@ import {
   Landmark,
   Receipt,
 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,15 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { useSalesAnalytics, type RankingItem } from "./useSalesAnalytics";
+import { useSalesAnalytics, useSalesDetail, type RankingItem, type DetailRow } from "./useSalesAnalytics";
 import { UploadVentasDialog } from "./UploadVentasDialog";
 import { currentMonthDate, formatCurrency, formatNumber, formatPercent, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
@@ -69,7 +59,7 @@ function mapMonthOptions(months: string[]) {
   });
 }
 
-function KpiCard({
+const KpiCard = React.memo(function KpiCard({
   icon: Icon,
   label,
   value,
@@ -109,9 +99,9 @@ function KpiCard({
       {hint && <p className={cn("mt-1 truncate text-xs text-muted-foreground", hintClassName)}>{hint}</p>}
     </div>
   );
-}
+});
 
-function MultiSelectFilter({
+const MultiSelectFilter = React.memo(function MultiSelectFilter({
   label,
   options,
   selected,
@@ -189,9 +179,9 @@ function MultiSelectFilter({
       </PopoverContent>
     </Popover>
   );
-}
+});
 
-function OperationalSplitCard({
+const OperationalSplitCard = React.memo(function OperationalSplitCard({
   percentage,
   amount,
   items,
@@ -235,9 +225,9 @@ function OperationalSplitCard({
       </div>
     </div>
   );
-}
+});
 
-function RankingCard({
+const RankingCard = React.memo(function RankingCard({
   title,
   items,
   flagNegative = false,
@@ -293,7 +283,7 @@ function RankingCard({
       )}
     </div>
   );
-}
+});
 
 type SortKey =
   | "sale_date"
@@ -307,86 +297,15 @@ type SortKey =
   | "margenU"
   | "margenPct";
 type SortDir = "asc" | "desc";
-type ColFilters = Record<SortKey, string>;
 
-type NumFilter =
-  | { kind: "eq"; a: number }
-  | { kind: "gt"; a: number }
-  | { kind: "gte"; a: number }
-  | { kind: "lt"; a: number }
-  | { kind: "lte"; a: number }
-  | { kind: "range"; a: number; b: number };
-
-function parseNumLiteral(s: string): number | null {
-  // Limpia separadores de miles y acepta coma decimal.
-  const cleaned = s.replace(/\s+/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
-  if (cleaned === "" || cleaned === "-" || cleaned === "+") return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
-}
-
-function parseNumFilter(input: string): NumFilter | null {
-  const s = input.trim();
-  if (!s) return null;
-  if (s.startsWith(">=")) {
-    const a = parseNumLiteral(s.slice(2));
-    return a === null ? null : { kind: "gte", a };
-  }
-  if (s.startsWith("<=")) {
-    const a = parseNumLiteral(s.slice(2));
-    return a === null ? null : { kind: "lte", a };
-  }
-  if (s.startsWith(">")) {
-    const a = parseNumLiteral(s.slice(1));
-    return a === null ? null : { kind: "gt", a };
-  }
-  if (s.startsWith("<")) {
-    const a = parseNumLiteral(s.slice(1));
-    return a === null ? null : { kind: "lt", a };
-  }
-  // Rango "a-b" (admite negativos en a sólo si no inicia con "-")
-  const m = s.match(/^(-?\d[\d.,]*)\s*-\s*(-?\d[\d.,]*)$/);
-  if (m) {
-    const a = parseNumLiteral(m[1]);
-    const b = parseNumLiteral(m[2]);
-    if (a === null || b === null) return null;
-    return { kind: "range", a: Math.min(a, b), b: Math.max(a, b) };
-  }
-  const a = parseNumLiteral(s);
-  return a === null ? null : { kind: "eq", a };
-}
-
-function matchNumFilter(value: number | null | undefined, f: NumFilter | null): boolean {
-  if (!f) return true;
-  if (value === null || value === undefined || !Number.isFinite(value)) return false;
-  switch (f.kind) {
-    case "eq":
-      return Math.abs(value - f.a) < 0.5;
-    case "gt":
-      return value > f.a;
-    case "gte":
-      return value >= f.a;
-    case "lt":
-      return value < f.a;
-    case "lte":
-      return value <= f.a;
-    case "range":
-      return value >= f.a && value <= f.b;
-  }
-}
-
-function matchTextFilter(value: string | null | undefined, q: string): boolean {
-  if (!q.trim()) return true;
-  return (value ?? "").toLowerCase().includes(q.trim().toLowerCase());
-}
-
-function SortableHead({
+const SortableHead = React.memo(function SortableHead({
   label,
   sortKey,
   current,
   dir,
   onClick,
   align = "left",
+  width,
 }: {
   label: string;
   sortKey: SortKey;
@@ -394,54 +313,144 @@ function SortableHead({
   dir: SortDir;
   onClick: (k: SortKey) => void;
   align?: "left" | "right";
+  width: string;
 }) {
   const active = current === sortKey;
   return (
-    <TableHead className={cn(align === "right" && "text-right", "p-0")}>
+    <div
+      className={cn(
+        "flex h-10 items-center px-3 text-xs font-medium border-b border-border/40",
+        align === "right" ? "justify-end" : "justify-start",
+      )}
+      style={{ width, flexShrink: 0 }}
+    >
       <button
         type="button"
         onClick={() => onClick(sortKey)}
         className={cn(
-          "flex h-10 w-full items-center gap-1 px-2 text-xs font-medium transition-colors hover:text-foreground",
-          align === "right" ? "justify-end" : "justify-start",
+          "flex items-center gap-1 transition-colors hover:text-foreground",
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
         <span>{label}</span>
         {active ? (
-          dir === "asc" ? (
-            <ChevronUp className="h-3 w-3" />
-          ) : (
-            <ChevronDown className="h-3 w-3" />
-          )
+          dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
         ) : (
           <ChevronsUpDown className="h-3 w-3 opacity-40" />
         )}
       </button>
-    </TableHead>
+    </div>
   );
-}
+});
 
-function FilterCell({
-  value,
-  onChange,
-  numeric = false,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  numeric?: boolean;
-  placeholder?: string;
-}) {
+// Definición de columnas (anchos px) — usada por header y por cada fila virtual.
+const COLS: Array<{ key: SortKey; label: string; width: number; align: "left" | "right" }> = [
+  { key: "sale_date", label: "Fecha", width: 110, align: "left" },
+  { key: "vendedor", label: "Vendedor", width: 150, align: "left" },
+  { key: "dependencia", label: "Dependencia", width: 150, align: "left" },
+  { key: "tercero", label: "Tercero", width: 220, align: "left" },
+  { key: "referencia", label: "Ref", width: 140, align: "left" },
+  { key: "cantidad", label: "Cant", width: 90, align: "right" },
+  { key: "precio_unitario", label: "PUV", width: 110, align: "right" },
+  { key: "ctu", label: "CTU", width: 110, align: "right" },
+  { key: "margenU", label: "Margen U.", width: 120, align: "right" },
+  { key: "margenPct", label: "Margen %", width: 100, align: "right" },
+];
+
+const TOTAL_WIDTH = COLS.reduce((sum, c) => sum + c.width, 0);
+
+const VirtualRow = React.memo(function VirtualRow({ row }: { row: DetailRow }) {
+  const margenU = row.margenUnitario;
+  const isNegPct = (row.margenPct ?? 0) < 0;
   return (
-    <TableHead className="p-1">
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? (numeric ? ">0" : "Filtrar…")}
-        className={cn("h-7 px-2 text-xs", numeric && "text-right tabular-nums")}
-      />
-    </TableHead>
+    <div className="flex items-center border-b border-border/40 text-sm hover:bg-accent/30">
+      <div className="px-3 whitespace-nowrap" style={{ width: COLS[0].width, flexShrink: 0 }}>{row.sale_date}</div>
+      <div className="px-3 truncate" style={{ width: COLS[1].width, flexShrink: 0 }}>{row.vendedor ?? "—"}</div>
+      <div className="px-3 truncate" style={{ width: COLS[2].width, flexShrink: 0 }}>{row.dependencia ?? "—"}</div>
+      <div className="px-3 truncate" style={{ width: COLS[3].width, flexShrink: 0 }}>{row.tercero ?? "—"}</div>
+      <div className="px-3 font-medium truncate" style={{ width: COLS[4].width, flexShrink: 0 }}>{row.referencia}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[5].width, flexShrink: 0 }}>{formatNumber(row.cantidad)}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[6].width, flexShrink: 0 }}>{formatCurrency(row.precio_unitario ?? 0)}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[7].width, flexShrink: 0 }}>
+        {row.ctu !== null ? formatCurrency(row.ctu) : <span className="text-[10px] text-muted-foreground">—</span>}
+      </div>
+      <div className={cn("px-3 text-right tabular-nums", row.ctu !== null && (margenU ?? 0) < 0 && "text-rose-600")} style={{ width: COLS[8].width, flexShrink: 0 }}>
+        {row.ctu !== null && margenU !== null ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
+      </div>
+      <div className={cn("px-3 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")} style={{ width: COLS[9].width, flexShrink: 0 }}>
+        {row.margenPct === null ? "—" : formatPercent(row.margenPct, 1)}
+      </div>
+    </div>
+  );
+});
+
+function DetailVirtualTable({
+  rows,
+  sortKey,
+  sortDir,
+  onToggleSort,
+}: {
+  rows: DetailRow[];
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onToggleSort: (k: SortKey) => void;
+}) {
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 36,
+    overscan: 12,
+  });
+
+  return (
+    <div ref={parentRef} className="mt-4 max-h-[calc(100vh-200px)] min-h-[600px] overflow-auto rounded-xl border border-border/40">
+      <div style={{ width: TOTAL_WIDTH, minWidth: "100%" }}>
+        {/* Header sticky */}
+        <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur border-b border-border/60" style={{ width: TOTAL_WIDTH }}>
+          {COLS.map((c) => (
+            <SortableHead
+              key={c.key}
+              label={c.label}
+              sortKey={c.key}
+              current={sortKey}
+              dir={sortDir}
+              onClick={onToggleSort}
+              align={c.align}
+              width={`${c.width}px`}
+            />
+          ))}
+        </div>
+        {/* Body virtualizado */}
+        {rows.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Sin resultados con los filtros aplicados.
+          </div>
+        ) : (
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: TOTAL_WIDTH }}>
+            {virtualizer.getVirtualItems().map((vRow) => {
+              const row = rows[vRow.index];
+              return (
+                <div
+                  key={row.id}
+                  data-index={vRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: TOTAL_WIDTH,
+                    transform: `translateY(${vRow.start}px)`,
+                  }}
+                >
+                  <VirtualRow row={row} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -457,38 +466,38 @@ export function AnalisisVentasPage() {
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
   const [financialDiscountPct, setFinancialDiscountPct] = React.useState<number>(2.5);
   const [search, setSearch] = React.useState("");
-  // useDeferredValue para que el input de búsqueda no bloquee el render
-  // mientras se filtran/ordenan miles de filas.
-  const deferredSearch = React.useDeferredValue(search);
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
-  const [colFilters, setColFilters] = React.useState<ColFilters>({
-    sale_date: "",
-    vendedor: "",
-    dependencia: "",
-    tercero: "",
-    referencia: "",
-    cantidad: "",
-    precio_unitario: "",
-    ctu: "",
-    margenU: "",
-    margenPct: "",
-  });
+
+  const filters = React.useMemo(
+    () => ({ vendedores: vendedoresF, dependencias: dependenciasF, terceros: tercerosF }),
+    [vendedoresF, dependenciasF, tercerosF],
+  );
 
   const analytics = useSalesAnalytics({
     salesMonth,
     costPeriodMonth: costPeriod,
     opPeriodMonth: opPeriod,
     financialDiscountPct,
-    filters: {
-      vendedores: vendedoresF,
-      dependencias: dependenciasF,
-      terceros: tercerosF,
-    },
+    filters,
     refreshKey,
   });
+
+  const detail = useSalesDetail({
+    salesMonth,
+    costPeriodMonth: costPeriod,
+    financialDiscountPct,
+    filters,
+    search,
+    sortKey,
+    sortDir,
+    limit: 500,
+    refreshKey,
+    enabled: analytics.hasAnySales,
+  });
+
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
-  const discountOptions = React.useMemo(() => analytics.financialDiscounts, [analytics.financialDiscounts]);
+  const discountOptions = analytics.financialDiscounts;
 
   React.useEffect(() => {
     if (discountOptions.length === 0) return;
@@ -499,118 +508,27 @@ export function AnalisisVentasPage() {
     }
   }, [discountOptions, financialDiscountPct]);
 
-
   React.useEffect(() => {
     if (analytics.salesMonths.length === 0) return;
     setSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
   }, [analytics.salesMonths]);
 
-  const detailState = React.useMemo(() => {
-    const q = deferredSearch.trim().toLowerCase();
-    const numFilters = {
-      cantidad: parseNumFilter(colFilters.cantidad),
-      precio_unitario: parseNumFilter(colFilters.precio_unitario),
-      ctu: parseNumFilter(colFilters.ctu),
-      margenU: parseNumFilter(colFilters.margenU),
-      margenPct: parseNumFilter(colFilters.margenPct),
-    };
-      const filtered = analytics.filteredRows.filter((r) => {
-      if (q) {
-        const hit =
-          (r.referencia ?? "").toLowerCase().includes(q) ||
-          (r.tercero ?? "").toLowerCase().includes(q) ||
-          (r.vendedor ?? "").toLowerCase().includes(q);
-        if (!hit) return false;
+  const toggleSort = React.useCallback((key: SortKey) => {
+    setSortKey((cur) => {
+      if (cur === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return cur;
       }
-      if (!matchTextFilter(r.sale_date, colFilters.sale_date)) return false;
-      if (!matchTextFilter(r.vendedor, colFilters.vendedor)) return false;
-      if (!matchTextFilter(r.dependencia, colFilters.dependencia)) return false;
-      if (!matchTextFilter(r.tercero, colFilters.tercero)) return false;
-      if (!matchTextFilter(r.referencia, colFilters.referencia)) return false;
-      if (!matchNumFilter(Number(r.cantidad), numFilters.cantidad)) return false;
-      if (!matchNumFilter(r.precio_unitario, numFilters.precio_unitario)) return false;
-      if (!matchNumFilter(r.ctu, numFilters.ctu)) return false;
-      const margenU = r.margenUnitario;
-      if (!matchNumFilter(margenU, numFilters.margenU)) return false;
-      if (!matchNumFilter(r.margenPct, numFilters.margenPct)) return false;
-      return true;
-    });
-
-    const dir = sortDir === "asc" ? 1 : -1;
-    const getVal = (r: (typeof filtered)[number]): string | number | null => {
-      switch (sortKey) {
-        case "sale_date":
-          return r.sale_date;
-        case "vendedor":
-          return r.vendedor;
-        case "dependencia":
-          return r.dependencia;
-        case "tercero":
-          return r.tercero;
-        case "referencia":
-          return r.referencia;
-        case "cantidad":
-          return Number(r.cantidad);
-        case "precio_unitario":
-          return r.precio_unitario;
-        case "ctu":
-          return r.ctu;
-        case "margenU":
-          return r.margenUnitario;
-        case "margenPct":
-          return r.margenPct;
-      }
-    };
-    const sorted = [...filtered].sort((a, b) => {
-      const av = getVal(a);
-      const bv = getVal(b);
-      const aNull = av === null || av === undefined || av === "";
-      const bNull = bv === null || bv === undefined || bv === "";
-      if (aNull && bNull) return 0;
-      if (aNull) return 1; // nulos siempre al final
-      if (bNull) return -1;
-      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-      return String(av).localeCompare(String(bv)) * dir;
-    });
-    return {
-      filteredCount: filtered.length,
-      detailRows: sorted.slice(0, 2000),
-    };
-  }, [analytics.filteredRows, deferredSearch, colFilters, sortKey, sortDir]);
-
-  const filteredCount = detailState.filteredCount;
-  const detailRows = detailState.detailRows;
-
-  const hasAnyColFilter = React.useMemo(
-    () => Object.values(colFilters).some((v) => v.trim() !== ""),
-    [colFilters],
-  );
-  const hasAnyFilter = hasAnyColFilter || search.trim() !== "";
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
       setSortDir("asc");
-    }
-  };
-
-  const clearAllFilters = () => {
-    setColFilters({
-      sale_date: "",
-      vendedor: "",
-      dependencia: "",
-      tercero: "",
-      referencia: "",
-      cantidad: "",
-      precio_unitario: "",
-      ctu: "",
-      margenU: "",
-      margenPct: "",
+      return key;
     });
+  }, []);
+
+  const clearAllFilters = React.useCallback(() => {
     setSearch("");
-  };
+  }, []);
+
+  const hasAnyFilter = search.trim() !== "";
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-10 sm:px-6 lg:px-10">
@@ -644,7 +562,6 @@ export function AnalisisVentasPage() {
         </div>
       ) : (
         <>
-          {/* Barra de progreso sutil durante recargas no destructivas */}
           {analytics.loading && (
             <div className="-mb-6 h-0.5 overflow-hidden rounded-full">
               <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
@@ -717,7 +634,6 @@ export function AnalisisVentasPage() {
             </div>
           </div>
 
-          {/* Aviso de cobertura de costos */}
           {analytics.ctuMapSize === 0 && (
             <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
               <AlertTriangle className="h-4 w-4" />
@@ -726,7 +642,6 @@ export function AnalisisVentasPage() {
             </div>
           )}
 
-          {/* Aviso de líneas excluidas del cálculo de margen */}
           {analytics.kpis.lineasExcluidas > 0 && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -748,7 +663,6 @@ export function AnalisisVentasPage() {
             </div>
           )}
 
-          {/* KPIs */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <KpiCard
               icon={Wallet}
@@ -808,7 +722,6 @@ export function AnalisisVentasPage() {
               valueClassName="text-2xl md:text-3xl"
             />
           </div>
-          {/* Rankings */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <RankingCard title="Top vendedores · margen bruto" items={analytics.rankings.vendedores} />
             <RankingCard title="Top dependencias · margen bruto" items={analytics.rankings.dependencias} />
@@ -822,10 +735,8 @@ export function AnalisisVentasPage() {
               <div>
                 <h3 className="text-sm font-semibold">Detalle de ventas</h3>
                 <p className="text-xs text-muted-foreground">
-                  Mostrando {formatNumber(detailRows.length)} de {formatNumber(analytics.filteredRows.length)} líneas
-                  {hasAnyColFilter && (
-                    <span> · filtradas: {formatNumber(filteredCount)}</span>
-                  )}
+                  Mostrando {formatNumber(detail.rows.length)} de {formatNumber(detail.total)} líneas filtradas
+                  {detail.loading && <span className="ml-2 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> actualizando…</span>}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -845,79 +756,12 @@ export function AnalisisVentasPage() {
                 </div>
               </div>
             </div>
-            <div className="mt-4 max-h-[calc(100vh-200px)] min-h-[600px] overflow-auto rounded-xl border border-border/40">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
-                  <TableRow>
-                    <SortableHead label="Fecha" sortKey="sale_date" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                    <SortableHead label="Vendedor" sortKey="vendedor" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                    <SortableHead label="Dependencia" sortKey="dependencia" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                    <SortableHead label="Tercero" sortKey="tercero" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                    <SortableHead label="Ref" sortKey="referencia" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                    <SortableHead label="Cant" sortKey="cantidad" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-                    <SortableHead label="PUV" sortKey="precio_unitario" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-                    <SortableHead label="CTU" sortKey="ctu" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-                    <SortableHead label="Margen U." sortKey="margenU" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-                    <SortableHead label="Margen %" sortKey="margenPct" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-                  </TableRow>
-                  <TableRow className="hover:bg-transparent">
-                    <FilterCell value={colFilters.sale_date} onChange={(v) => setColFilters((p) => ({ ...p, sale_date: v }))} placeholder="2024-03" />
-                    <FilterCell value={colFilters.vendedor} onChange={(v) => setColFilters((p) => ({ ...p, vendedor: v }))} />
-                    <FilterCell value={colFilters.dependencia} onChange={(v) => setColFilters((p) => ({ ...p, dependencia: v }))} />
-                    <FilterCell value={colFilters.tercero} onChange={(v) => setColFilters((p) => ({ ...p, tercero: v }))} />
-                    <FilterCell value={colFilters.referencia} onChange={(v) => setColFilters((p) => ({ ...p, referencia: v }))} />
-                    <FilterCell value={colFilters.cantidad} onChange={(v) => setColFilters((p) => ({ ...p, cantidad: v }))} numeric />
-                    <FilterCell value={colFilters.precio_unitario} onChange={(v) => setColFilters((p) => ({ ...p, precio_unitario: v }))} numeric />
-                    <FilterCell value={colFilters.ctu} onChange={(v) => setColFilters((p) => ({ ...p, ctu: v }))} numeric />
-                    <FilterCell value={colFilters.margenU} onChange={(v) => setColFilters((p) => ({ ...p, margenU: v }))} numeric />
-                    <FilterCell value={colFilters.margenPct} onChange={(v) => setColFilters((p) => ({ ...p, margenPct: v }))} numeric />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detailRows.map((r) => {
-                    const margenU = r.margenUnitario;
-                    const isNeg = (r.margenPct ?? 0) < 0;
-                    return (
-                      <TableRow key={r.id}>
-                        <TableCell className="whitespace-nowrap">{r.sale_date}</TableCell>
-                        <TableCell className="max-w-[140px] truncate">{r.vendedor ?? "—"}</TableCell>
-                        <TableCell className="max-w-[140px] truncate">{r.dependencia ?? "—"}</TableCell>
-                        <TableCell className="max-w-[160px] truncate">{r.tercero ?? "—"}</TableCell>
-                        <TableCell className="font-medium">{r.referencia}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(r.cantidad)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatCurrency(r.precio_unitario ?? 0)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {r.ctu !== null ? (
-                            formatCurrency(r.ctu)
-                          ) : r.costoCero ? (
-                            <Badge variant="outline" className="border-rose-300 bg-rose-50 text-[10px] font-medium text-rose-700">
-                              Costo 0
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] font-medium text-amber-700">
-                              Sin costo
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", r.computable && (margenU ?? 0) < 0 && "text-rose-600")}>
-                          {r.computable ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", isNeg && "font-semibold text-rose-600")}>
-                          {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {detailRows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
-                        Sin resultados con los filtros aplicados.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            <DetailVirtualTable
+              rows={detail.rows}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onToggleSort={toggleSort}
+            />
           </div>
         </>
       )}
