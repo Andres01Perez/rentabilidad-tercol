@@ -194,9 +194,11 @@ function MultiSelectFilter({
 function OperationalSplitCard({
   percentage,
   amount,
+  items,
 }: {
   percentage: string;
   amount: string;
+  items: Array<{ id: string; name: string; percentage: number }>;
 }) {
   return (
     <div className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card p-5 shadow-sm backdrop-blur">
@@ -208,6 +210,18 @@ function OperationalSplitCard({
       </div>
       <p className="mt-2 truncate text-2xl font-bold tracking-tight md:text-3xl">{percentage}</p>
       <p className="mt-1 truncate text-sm text-muted-foreground">{amount}</p>
+      {items.length > 0 && (
+        <div className="mt-4 space-y-2 border-t border-border/50 pt-3">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+              <span className="min-w-0 truncate text-muted-foreground">{item.name}</span>
+              <span className="shrink-0 text-right font-medium tabular-nums">
+                {formatPercent(item.percentage, 1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
