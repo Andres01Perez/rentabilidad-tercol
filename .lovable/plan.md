@@ -1,45 +1,94 @@
-## Plan de implementación
+# Plan actualizado: descuento financiero y nuevo esquema de KPIs en análisis de ventas
 
-1. Simplificar el filtro principal de `/analisis-ventas`
-- Reemplazar el `DateRangePicker` por un selector de mes único.
-- Construir la lista de meses a partir de las ventas realmente cargadas en la tabla `sales`, para que el usuario elija solo entre meses con información.
-- Dejar ese filtro como criterio principal de consulta, usando el mes completo seleccionado de forma automática.
+## Objetivo
+Agregar un parámetro de descuento financiero en `/analisis-ventas`, aplicarlo a los cálculos de rentabilidad y reorganizar las cards para que reflejen correctamente ventas netas, utilidad y utilidad operacional.
 
-2. Ajustar la lógica de carga en `useSalesAnalytics`
-- Cambiar el parámetro `range` por un `salesMonth` (formato `YYYY-MM-01`).
-- Convertir internamente ese mes en rango completo de fechas (`desde el día 1 hasta el último día del mes`) para seguir consultando `sale_date` sin cambiar la estructura de la tabla.
-- Exponer también el catálogo de meses disponibles en ventas para alimentar el nuevo selector del frontend.
+## Qué se va a implementar
 
-3. Actualizar la UI de `/analisis-ventas`
-- Quitar la complejidad de selección por rango y mostrar un control simple de “Mes de ventas”.
-- Mantener los selectores actuales de “Mes de costos” y “Mes operacional”, pero con valor por defecto en el mes anterior al actual.
-- Si el mes anterior no existe en el catálogo de costos u operacionales, usar el mes más reciente disponible para evitar estados vacíos innecesarios.
+### 1. Nuevo parámetro: descuento financiero
+- Crear una tabla de catálogo para almacenar los porcentajes permitidos de descuento financiero.
+- Cargar ese catálogo en la vista como un selector con estas opciones:
+  - 1%
+  - 1.5%
+  - 2%
+  - 2.5%
+  - 3%
+  - 3.5%
+  - 4%
+- Definir **2.5% como valor por defecto** al abrir la vista.
 
-4. Ajustar defaults en la calculadora
-- Cambiar la selección inicial de meses en `CalculadoraPage` para que:
-  - costos de producto arranquen con el mes anterior,
-  - costos operacionales arranquen con el mes anterior.
-- Mantener la selección múltiple actual para que el usuario todavía pueda cambiar o agregar otros meses manualmente.
-- Aplicar la misma regla de fallback: si el mes anterior no existe en el catálogo, preseleccionar el más reciente disponible.
+### 2. Aplicar el descuento financiero a los cálculos
+Actualizar `useSalesAnalytics.ts` para calcular los KPIs con esta lógica:
+- Ventas totales = suma de ventas importadas.
+- Costo total = suma de costos solo de líneas computables.
+- Margen bruto en plata = ventas computables - costo total.
+- Margen bruto en porcentaje = margen bruto / ventas computables.
+- Operacional % = porcentaje total de costos operacionales del mes seleccionado.
+- Operacional $ = ventas totales × porcentaje operacional.
+- **Ventas netas** = ventas computables - descuento financiero sobre ventas computables.
+- **Utilidad** = ventas netas - costo total.
+- **Utilidad operacional en plata** = utilidad - operacional $.
+- **Utilidad operacional en porcentaje** = margen bruto % - porcentaje operacional.
 
-5. Alinear defaults en módulos de mantenimiento
-- Cambiar `CostosProductosPage` para que abra por defecto en el mes anterior en vez del mes actual.
-- Cambiar `CostosOperacionalesPage` para que abra por defecto en el mes anterior en vez del mes actual.
-- Conservar `MonthSelect` tal como está, solo cambiando el valor inicial.
+### 3. Mantener la exclusión de referencias con costo cero o sin costo
+- Conservar la lógica ya implementada para excluir referencias con `ctu <= 0` o sin costo del cálculo de costos y márgenes.
+- Mantener el aviso de líneas excluidas para que el usuario vea qué ventas no participaron en la rentabilidad.
+- Asegurar que el descuento financiero y los porcentajes de utilidad se calculen sobre la base computable correcta, sin contaminarse con referencias inválidas.
 
-## Resultado esperado
-- En análisis de ventas el usuario escogerá un mes, no un rango arbitrario.
-- Costos y costos operacionales arrancarán automáticamente en el mes anterior, que es el comportamiento real de uso.
-- La navegación será más rápida y con menos fricción porque habrá menos decisiones manuales al entrar a cada módulo.
+### 4. Reorganizar las cards superiores
+Reemplazar las cards actuales por dos filas:
+
+#### Primera fila
+- Ventas totales
+- Margen bruto en plata
+- Margen bruto en porcentaje
+- Operacional: porcentaje y plata en la misma card, con mayor jerarquía visual para el porcentaje
+
+#### Segunda fila
+- Ventas netas
+- Costo total
+- Utilidad operacional en plata
+- Utilidad operacional en porcentaje
+
+### 5. Ajustar etiquetas y conceptos en toda la vista
+- Eliminar el concepto de “ventas brutas” y usar únicamente **ventas netas**.
+- Eliminar el concepto de “margen operacional” y reemplazarlo por **utilidad operacional**.
+- Si existen textos, hints, cards o cálculos auxiliares que aún hablen de “margen neto” o “margen operacional”, alinearlos al nuevo lenguaje para evitar inconsistencias.
+
+### 6. Ajustar la UI del filtro superior
+- Agregar el selector de descuento financiero junto a los demás filtros.
+- Mostrarlo como un selector simple y consistente con los selects actuales.
+- Etiquetarlo claramente para que se entienda que afecta ventas netas, utilidad y utilidad operacional.
+
+## Cambios de datos necesarios
+Se requiere una migración para crear una tabla catálogo, por ejemplo `financial_discounts`, con al menos:
+- `id`
+- `label`
+- `percentage`
+- `sort_order`
+- `is_active`
+- timestamps
+
+También se sembrarán los 7 valores iniciales y se dejará **2.5%** como opción por defecto en la experiencia de uso del frontend.
+
+## Archivos previstos
+- `src/features/analisis-ventas/useSalesAnalytics.ts`
+- `src/features/analisis-ventas/AnalisisVentasPage.tsx`
+- nueva migración en `supabase/migrations/...`
+- `src/integrations/supabase/types.ts` se actualizará automáticamente según el esquema resultante
 
 ## Detalles técnicos
-- Archivos principales a tocar:
-  - `src/features/analisis-ventas/AnalisisVentasPage.tsx`
-  - `src/features/analisis-ventas/useSalesAnalytics.ts`
-  - `src/features/calculadora/CalculadoraPage.tsx`
-  - `src/features/costos-productos/CostosProductosPage.tsx`
-  - `src/features/costos-operacionales/CostosOperacionalesPage.tsx`
-- Helpers reutilizables:
-  - `previousMonth(currentMonthDate())` para el default base.
-  - fallback al primer mes disponible cuando el default no exista en la data.
-- No hace falta cambiar base de datos ni estructura de tablas; es un ajuste de estado inicial, consulta y experiencia de uso.
+- El hook debe devolver nuevos campos KPI, por ejemplo:
+  - `descuentoFinancieroPct`
+  - `descuentoFinancieroMonto`
+  - `ventasNetas`
+  - `operacionalMonto`
+  - `utilidad`
+  - `utilidadOperacional`
+  - `utilidadOperacionalPct`
+- El catálogo de descuentos se consulta una vez y se usa para poblar el selector.
+- La card operacional de la primera fila destacará visualmente el porcentaje sobre el valor en pesos.
+- Los rankings y la tabla detalle se revisarán para que no sigan mostrando conceptos obsoletos como “margen neto” si ya no corresponden al modelo nuevo.
+
+## Resultado esperado
+La vista de análisis de ventas quedará alineada con la lógica real del negocio: descuento financiero configurable, ventas netas como base posterior al descuento, utilidad calculada correctamente y utilidad operacional presentada con una estructura de KPIs más clara.
