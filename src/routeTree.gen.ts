@@ -40,7 +40,9 @@ const AppNegociacionesRoute = AppNegociacionesRouteImport.update({
   id: '/negociaciones',
   path: '/negociaciones',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/negociaciones.lazy').then((d) => d.Route),
+)
 const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
   id: '/listas-precios',
   path: '/listas-precios',
