@@ -899,7 +899,7 @@ export function AnalisisVentasPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", r.computable && margenU < 0 && "text-rose-600")}>
+                        <TableCell className={cn("text-right tabular-nums", r.computable && (margenU ?? 0) < 0 && "text-rose-600")}>
                           {r.computable ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums", isNeg && "font-semibold text-rose-600")}>
