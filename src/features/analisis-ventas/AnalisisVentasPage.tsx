@@ -50,6 +50,20 @@ function pickDefaultMonth(available: string[], preferred: string) {
   return available[0] ?? preferred;
 }
 
+function mapMonthOptions(months: string[]) {
+  return months.map((value) => {
+    const date = new Date(`${value}T00:00:00`);
+    const label = new Intl.DateTimeFormat("es-CO", {
+      month: "long",
+      year: "numeric",
+    }).format(date);
+    return {
+      value,
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+    };
+  });
+}
+
 function KpiCard({
   icon: Icon,
   label,
@@ -416,6 +430,7 @@ export function AnalisisVentasPage() {
     },
     refreshKey,
   });
+  const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
 
   React.useEffect(() => {
     if (analytics.salesMonths.length === 0) return;
@@ -626,7 +641,7 @@ export function AnalisisVentasPage() {
                 value={salesMonth}
                 onValueChange={setSalesMonth}
                 className="w-44"
-                months={Math.max(analytics.salesMonths.length, 12)}
+                options={salesMonthOptions}
               />
             </div>
             <div className="flex flex-col gap-1">
