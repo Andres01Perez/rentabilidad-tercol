@@ -526,6 +526,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     salesMonths,
     financialDiscounts,
     pctOperacional,
+    operationalBreakdown,
     salesRows,
     filteredRows,
     kpis,
