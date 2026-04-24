@@ -69,7 +69,9 @@ const AppCostosOperacionalesRoute = AppCostosOperacionalesRouteImport.update({
   id: '/costos-operacionales',
   path: '/costos-operacionales',
   getParentRoute: () => AppRoute,
-} as any)
+} as any).lazy(() =>
+  import('./routes/_app/costos-operacionales.lazy').then((d) => d.Route),
+)
 const AppConfiguracionesRoute = AppConfiguracionesRouteImport.update({
   id: '/configuraciones',
   path: '/configuraciones',
