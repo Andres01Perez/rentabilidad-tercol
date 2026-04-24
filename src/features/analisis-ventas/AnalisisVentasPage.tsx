@@ -32,7 +32,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MonthSelect } from "@/components/period/MonthSelect";
-import { DateRangePicker, type DateRange } from "@/components/period/DateRangePicker";
 import {
   Table,
   TableBody,
@@ -43,15 +42,26 @@ import {
 } from "@/components/ui/table";
 import { useSalesAnalytics, type RankingItem } from "./useSalesAnalytics";
 import { UploadVentasDialog } from "./UploadVentasDialog";
-import { currentMonthDate, formatCurrency, formatNumber, formatPercent } from "@/lib/period";
+import { currentMonthDate, formatCurrency, formatNumber, formatPercent, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
-/** Default range = mes en curso (reduce ~10x el payload inicial). */
-function defaultMonthRange(): DateRange {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from, to };
+function pickDefaultMonth(available: string[], preferred: string) {
+  if (available.includes(preferred)) return preferred;
+  return available[0] ?? preferred;
+}
+
+function mapMonthOptions(months: string[]) {
+  return months.map((value) => {
+    const date = new Date(`${value}T00:00:00`);
+    const label = new Intl.DateTimeFormat("es-CO", {
+      month: "long",
+      year: "numeric",
+    }).format(date);
+    return {
+      value,
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+    };
+  });
 }
 
 function KpiCard({
@@ -383,18 +393,10 @@ function FilterCell({
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
-  // Por defecto cargamos solo el mes actual para que el dashboard sea casi
-  // instantáneo. El usuario puede ampliar el rango si quiere histórico.
-  const [range, setRange] = React.useState<DateRange>(() => defaultMonthRange());
-  // Rango debounced (300ms) para evitar reconsultas en cascada al ajustar
-  // dos fechas seguidas.
-  const [debouncedRange, setDebouncedRange] = React.useState<DateRange>(range);
-  React.useEffect(() => {
-    const t = setTimeout(() => setDebouncedRange(range), 300);
-    return () => clearTimeout(t);
-  }, [range]);
-  const [costPeriod, setCostPeriod] = React.useState<string>(currentMonthDate());
-  const [opPeriod, setOpPeriod] = React.useState<string>(currentMonthDate());
+  const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
+  const [salesMonth, setSalesMonth] = React.useState<string>(previousMonthDefault);
+  const [costPeriod, setCostPeriod] = React.useState<string>(previousMonthDefault);
+  const [opPeriod, setOpPeriod] = React.useState<string>(previousMonthDefault);
   const [vendedoresF, setVendedoresF] = React.useState<string[]>([]);
   const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
@@ -418,7 +420,7 @@ export function AnalisisVentasPage() {
   });
 
   const analytics = useSalesAnalytics({
-    range: debouncedRange,
+    salesMonth,
     costPeriodMonth: costPeriod,
     opPeriodMonth: opPeriod,
     filters: {
@@ -428,6 +430,12 @@ export function AnalisisVentasPage() {
     },
     refreshKey,
   });
+  const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
+
+  React.useEffect(() => {
+    if (analytics.salesMonths.length === 0) return;
+    setSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
+  }, [analytics.salesMonths]);
 
   const filteredCount = React.useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
@@ -625,7 +633,17 @@ export function AnalisisVentasPage() {
           )}
           {/* Filtros sticky */}
           <div className="glass sticky top-16 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
-            <DateRangePicker value={range} onChange={setRange} />
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Mes de ventas
+              </span>
+              <MonthSelect
+                value={salesMonth}
+                onValueChange={setSalesMonth}
+                className="w-44"
+                options={salesMonthOptions}
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de costos

@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatMonth, formatNumber, formatPercent } from "@/lib/period";
+import { currentMonthDate, formatCurrency, formatMonth, formatNumber, formatPercent, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import { StepCard } from "./StepCard";
 import { MultiMonthPicker } from "./MultiMonthPicker";
@@ -43,6 +43,11 @@ import {
   type SourceOption,
 } from "./useCalculadora";
 import { exportRentabilidadExcel } from "./exportExcel";
+
+function pickDefaultMonth(available: string[], preferred: string) {
+  if (available.includes(preferred)) return preferred;
+  return available[0] ?? "";
+}
 
 function KpiCard({
   icon: Icon,
@@ -93,6 +98,7 @@ interface CalcResult {
 export function CalculadoraPage() {
   const { costMonths: availCost, opMonths: availOp, loading: catalogLoading } =
     useMonthCatalog();
+  const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
 
   // Paso 1
   const [sourceKind, setSourceKind] = React.useState<SourceKind>("price_list");
@@ -106,6 +112,20 @@ export function CalculadoraPage() {
   // Paso 2 y 3
   const [costMonthsSel, setCostMonthsSel] = React.useState<string[]>([]);
   const [opMonthsSel, setOpMonthsSel] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (availCost.length === 0) return;
+    setCostMonthsSel((current) =>
+      current.length > 0 ? current : [pickDefaultMonth(availCost, previousMonthDefault)],
+    );
+  }, [availCost, previousMonthDefault]);
+
+  React.useEffect(() => {
+    if (availOp.length === 0) return;
+    setOpMonthsSel((current) =>
+      current.length > 0 ? current : [pickDefaultMonth(availOp, previousMonthDefault)],
+    );
+  }, [availOp, previousMonthDefault]);
 
   // Estado preview operacional (carga asíncrona al cambiar selección)
   const [opPreview, setOpPreview] = React.useState<OpMonthInfo[]>([]);
