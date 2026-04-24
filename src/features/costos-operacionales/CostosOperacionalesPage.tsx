@@ -80,7 +80,7 @@ export function CostosOperacionalesPage() {
 
 function AssignmentsTab() {
   const { user } = useAuth();
-  const [month, setMonth] = React.useState(currentMonthDate());
+  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
   const [centers, setCenters] = React.useState<CostCenter[]>([]);
   const [loading, setLoading] = React.useState(true);
