@@ -46,6 +46,14 @@ import { UploadVentasDialog } from "./UploadVentasDialog";
 import { currentMonthDate, formatCurrency, formatNumber, formatPercent } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
+/** Default range = mes en curso (reduce ~10x el payload inicial). */
+function defaultMonthRange(): DateRange {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from, to };
+}
+
 function KpiCard({
   icon: Icon,
   label,
@@ -375,7 +383,9 @@ function FilterCell({
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const [range, setRange] = React.useState<DateRange>({ from: null, to: null });
+  // Por defecto cargamos solo el mes actual para que el dashboard sea casi
+  // instantáneo. El usuario puede ampliar el rango si quiere histórico.
+  const [range, setRange] = React.useState<DateRange>(() => defaultMonthRange());
   // Rango debounced (300ms) para evitar reconsultas en cascada al ajustar
   // dos fechas seguidas.
   const [debouncedRange, setDebouncedRange] = React.useState<DateRange>(range);
@@ -389,6 +399,9 @@ export function AnalisisVentasPage() {
   const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
   const [search, setSearch] = React.useState("");
+  // useDeferredValue para que el input de búsqueda no bloquee el render
+  // mientras se filtran/ordenan miles de filas.
+  const deferredSearch = React.useDeferredValue(search);
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [colFilters, setColFilters] = React.useState<ColFilters>({
@@ -417,7 +430,7 @@ export function AnalisisVentasPage() {
   });
 
   const filteredCount = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
       cantidad: parseNumFilter(colFilters.cantidad),
       precio_unitario: parseNumFilter(colFilters.precio_unitario),
@@ -448,10 +461,10 @@ export function AnalisisVentasPage() {
       count++;
     }
     return count;
-  }, [analytics.filteredRows, search, colFilters]);
+  }, [analytics.filteredRows, deferredSearch, colFilters]);
 
   const detailRows = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
       cantidad: parseNumFilter(colFilters.cantidad),
       precio_unitario: parseNumFilter(colFilters.precio_unitario),
@@ -518,7 +531,7 @@ export function AnalisisVentasPage() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return sorted.slice(0, 2000);
-  }, [analytics.filteredRows, search, colFilters, sortKey, sortDir]);
+  }, [analytics.filteredRows, deferredSearch, colFilters, sortKey, sortDir]);
 
   const hasAnyColFilter = React.useMemo(
     () => Object.values(colFilters).some((v) => v.trim() !== ""),
@@ -653,6 +666,28 @@ export function AnalisisVentasPage() {
               <AlertTriangle className="h-4 w-4" />
               No hay costos de producto cargados para el mes seleccionado. El margen se calculará
               como ventas totales (sin costos).
+            </div>
+          )}
+
+          {/* Aviso de líneas excluidas del cálculo de margen */}
+          {analytics.kpis.lineasExcluidas > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                <strong>{formatNumber(analytics.kpis.lineasExcluidas)}</strong> líneas
+                ({formatCurrency(analytics.kpis.ventasExcluidas)} en ventas) se excluyen del cálculo
+                de margen para evitar sesgo.
+              </span>
+              {analytics.kpis.lineasCostoCero > 0 && (
+                <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-700">
+                  Costo 0: {formatNumber(analytics.kpis.lineasCostoCero)}
+                </Badge>
+              )}
+              {analytics.kpis.lineasSinCosto > 0 && (
+                <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">
+                  Sin costo: {formatNumber(analytics.kpis.lineasSinCosto)}
+                </Badge>
+              )}
             </div>
           )}
 
@@ -797,10 +832,20 @@ export function AnalisisVentasPage() {
                         <TableCell className="text-right tabular-nums">{formatNumber(r.cantidad)}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatCurrency(r.precio_unitario ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {r.ctu === null ? <span className="text-muted-foreground">—</span> : formatCurrency(r.ctu)}
+                          {r.ctu !== null ? (
+                            formatCurrency(r.ctu)
+                          ) : r.costoCero ? (
+                            <Badge variant="outline" className="border-rose-300 bg-rose-50 text-[10px] font-medium text-rose-700">
+                              Costo 0
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] font-medium text-amber-700">
+                              Sin costo
+                            </Badge>
+                          )}
                         </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", margenU < 0 && "text-rose-600")}>
-                          {formatCurrency(margenU)}
+                        <TableCell className={cn("text-right tabular-nums", r.computable && margenU < 0 && "text-rose-600")}>
+                          {r.computable ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums", isNeg && "font-semibold text-rose-600")}>
                           {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
