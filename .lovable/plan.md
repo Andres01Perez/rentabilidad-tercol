@@ -1,94 +1,97 @@
-# Plan actualizado: descuento financiero y nuevo esquema de KPIs en análisis de ventas
+# Plan de optimización integral de la plataforma Tercol
 
 ## Objetivo
-Agregar un parámetro de descuento financiero en `/analisis-ventas`, aplicarlo a los cálculos de rentabilidad y reorganizar las cards para que reflejen correctamente ventas netas, utilidad y utilidad operacional.
+Reducir la sensación de lentitud global de la plataforma en tres frentes: carga inicial, respuesta al hacer clic/interactuar y fluidez visual en navegación, filtros y apertura/cierre del menú lateral.
 
-## Qué se va a implementar
+## Hallazgos principales
+- La lentitud no parece venir de un solo componente, sino de una combinación de bundle inicial pesado, páginas que cargan demasiados datos al cliente y tablas/filtros que reprocesan grandes volúmenes en cada interacción.
+- La carga inicial está penalizada por recursos grandes y globales. En la medición del navegador aparecieron, entre otros:
+  - `xlsx.js` ~189 KB cargado en el arranque.
+  - `lucide-react.js` ~180 KB.
+  - `@supabase/supabase-js` ~128 KB.
+- Métricas observadas en preview:
+  - DOM Interactive ~3.3 s
+  - Full page load ~5.7 s
+  - First Contentful Paint muy tardío en la sesión medida
+  - 147 requests de red / 195 recursos cargados
+- Hay varias pantallas que descargan miles de filas completas y luego filtran/ordenan en memoria del navegador.
+- `analisis-ventas` hace varias cargas separadas y además construye tablas/rankings/filtros sobre todos los registros en cliente.
+- La calculadora y módulos de importación/exportación comparten utilidades Excel que hoy se importan desde módulos normales, lo que empuja `xlsx` al bundle principal aunque el usuario no esté importando archivos.
+- Solo `analisis-ventas` está en ruta lazy explícita; varias páginas pesadas siguen entrando por rutas directas.
 
-### 1. Nuevo parámetro: descuento financiero
-- Crear una tabla de catálogo para almacenar los porcentajes permitidos de descuento financiero.
-- Cargar ese catálogo en la vista como un selector con estas opciones:
-  - 1%
-  - 1.5%
-  - 2%
-  - 2.5%
-  - 3%
-  - 3.5%
-  - 4%
-- Definir **2.5% como valor por defecto** al abrir la vista.
+## Qué voy a corregir
 
-### 2. Aplicar el descuento financiero a los cálculos
-Actualizar `useSalesAnalytics.ts` para calcular los KPIs con esta lógica:
-- Ventas totales = suma de ventas importadas.
-- Costo total = suma de costos solo de líneas computables.
-- Margen bruto en plata = ventas computables - costo total.
-- Margen bruto en porcentaje = margen bruto / ventas computables.
-- Operacional % = porcentaje total de costos operacionales del mes seleccionado.
-- Operacional $ = ventas totales × porcentaje operacional.
-- **Ventas netas** = ventas computables - descuento financiero sobre ventas computables.
-- **Utilidad** = ventas netas - costo total.
-- **Utilidad operacional en plata** = utilidad - operacional $.
-- **Utilidad operacional en porcentaje** = margen bruto % - porcentaje operacional.
+### 1) Aligerar el arranque global
+- Separar la lógica de Excel (`xlsx`) en imports dinámicos para que solo cargue cuando el usuario abra un flujo de importación/exportación.
+- Revisar los componentes de importación (`ImportWizardDialog`, `UploadVentasDialog`, listas, costos, export Excel de calculadora) para que el parser no se incluya en el primer render de la app.
+- Extender carga diferida de rutas pesadas:
+  - `calculadora`
+  - `listas-precios`
+  - `costos-productos`
+  - `costos-operacionales`
+  - `negociaciones`
+  - revisar si `dashboard` también conviene lazy
+- Ajustar preloading del router para evitar precargas demasiado agresivas en hover/intención cuando no aporten valor.
 
-### 3. Mantener la exclusión de referencias con costo cero o sin costo
-- Conservar la lógica ya implementada para excluir referencias con `ctu <= 0` o sin costo del cálculo de costos y márgenes.
-- Mantener el aviso de líneas excluidas para que el usuario vea qué ventas no participaron en la rentabilidad.
-- Asegurar que el descuento financiero y los porcentajes de utilidad se calculen sobre la base computable correcta, sin contaminarse con referencias inválidas.
+### 2) Reducir renders globales innecesarios
+- Optimizar el layout autenticado (`_app`, `AppSidebar`, `SidebarProvider`) para que el colapso/expansión del menú no fuerce repintados evitables del árbol completo.
+- Revisar el contexto de autenticación para separar mejor el estado de usuario del catálogo de usuarios del login, evitando que datos no usados se propaguen globalmente.
+- Aislar componentes visuales del sidebar y encabezado con memoización donde sí aporte valor real.
 
-### 4. Reorganizar las cards superiores
-Reemplazar las cards actuales por dos filas:
+### 3) Optimizar consultas y volumen de datos
+- Auditar y reducir consultas que hoy traen datasets enteros cuando bastaría un subconjunto o un agregado.
+- En `analisis-ventas`:
+  - limitar columnas y cargas redundantes
+  - evitar consultas duplicadas para “hay ventas / meses / costos / descuentos / operacionales” cuando puedan consolidarse o diferirse
+  - mover más filtrado al query cuando aplique
+- En páginas operativas, revisar `.limit(5000)` y paginación manual para no renderizar miles de filas completas sin necesidad.
+- Priorizar “stale-while-revalidate” y cargas por demanda en paneles secundarios.
 
-#### Primera fila
-- Ventas totales
-- Margen bruto en plata
-- Margen bruto en porcentaje
-- Operacional: porcentaje y plata en la misma card, con mayor jerarquía visual para el porcentaje
+### 4) Hacer más ligeras las tablas y filtros pesados
+- En `analisis-ventas`, optimizar el pipeline actual de detalle:
+  - hoy se calcula `filteredCount` y `detailRows` recorriendo la misma data por separado
+  - unificar el procesamiento para evitar doble trabajo por cada cambio de filtro
+  - mantener sort/filter/search con memoización mejor estructurada
+- Aplicar la misma estrategia a `RentabilidadTable` y tablas grandes de costos.
+- Evaluar paginación/ventaneo visible para tablas extensas en lugar de renderizar cientos o miles de filas de una vez.
+- Reducir el costo de popovers/filtros cuando las listas de opciones son grandes.
 
-#### Segunda fila
-- Ventas netas
-- Costo total
-- Utilidad operacional en plata
-- Utilidad operacional en porcentaje
+### 5) Recortar UI costosa o no prioritaria
+- Revisar gráficos restantes de la calculadora y rankings visuales para verificar si todos deben renderizarse de inmediato o si conviene diferirlos.
+- Posponer componentes secundarios bajo interacción del usuario cuando no sean críticos para el primer paint.
+- Verificar que modales/sheets con tablas grandes carguen datos solo al abrirse, no antes.
 
-### 5. Ajustar etiquetas y conceptos en toda la vista
-- Eliminar el concepto de “ventas brutas” y usar únicamente **ventas netas**.
-- Eliminar el concepto de “margen operacional” y reemplazarlo por **utilidad operacional**.
-- Si existen textos, hints, cards o cálculos auxiliares que aún hablen de “margen neto” o “margen operacional”, alinearlos al nuevo lenguaje para evitar inconsistencias.
+### 6) Mejorar percepción de velocidad
+- Añadir estados de transición más ligeros donde hoy el usuario siente “tosquedad”.
+- Evitar bloqueos visuales en clics de filtros, selects y menú lateral.
+- Revisar duraciones/transiciones del sidebar para que se sienta más rápida y menos pesada.
 
-### 6. Ajustar la UI del filtro superior
-- Agregar el selector de descuento financiero junto a los demás filtros.
-- Mostrarlo como un selector simple y consistente con los selects actuales.
-- Etiquetarlo claramente para que se entienda que afecta ventas netas, utilidad y utilidad operacional.
+## Orden de implementación
+1. Sacar `xlsx` del bundle inicial con imports dinámicos.
+2. Convertir rutas pesadas a lazy loading.
+3. Optimizar `analisis-ventas` (consultas + pipeline de filtros + tabla).
+4. Optimizar calculadora y tablas grandes.
+5. Afinar sidebar/layout/contextos globales.
+6. Medir antes/después y hacer una segunda pasada fina.
 
-## Cambios de datos necesarios
-Se requiere una migración para crear una tabla catálogo, por ejemplo `financial_discounts`, con al menos:
-- `id`
-- `label`
-- `percentage`
-- `sort_order`
-- `is_active`
-- timestamps
-
-También se sembrarán los 7 valores iniciales y se dejará **2.5%** como opción por defecto en la experiencia de uso del frontend.
-
-## Archivos previstos
-- `src/features/analisis-ventas/useSalesAnalytics.ts`
-- `src/features/analisis-ventas/AnalisisVentasPage.tsx`
-- nueva migración en `supabase/migrations/...`
-- `src/integrations/supabase/types.ts` se actualizará automáticamente según el esquema resultante
-
-## Detalles técnicos
-- El hook debe devolver nuevos campos KPI, por ejemplo:
-  - `descuentoFinancieroPct`
-  - `descuentoFinancieroMonto`
-  - `ventasNetas`
-  - `operacionalMonto`
-  - `utilidad`
-  - `utilidadOperacional`
-  - `utilidadOperacionalPct`
-- El catálogo de descuentos se consulta una vez y se usa para poblar el selector.
-- La card operacional de la primera fila destacará visualmente el porcentaje sobre el valor en pesos.
-- Los rankings y la tabla detalle se revisarán para que no sigan mostrando conceptos obsoletos como “margen neto” si ya no corresponden al modelo nuevo.
+## Validación
+Voy a validar la mejora con:
+- perfil de performance del navegador
+- revisión de requests y tamaño de recursos
+- tiempo de carga inicial
+- respuesta al colapsar/expandir sidebar
+- respuesta al abrir filtros y cambiar selects
+- comparación de fluidez en `analisis-ventas`, `calculadora`, `costos-productos` y `negociaciones`
 
 ## Resultado esperado
-La vista de análisis de ventas quedará alineada con la lógica real del negocio: descuento financiero configurable, ventas netas como base posterior al descuento, utilidad calculada correctamente y utilidad operacional presentada con una estructura de KPIs más clara.
+- Menor tiempo de arranque y menos scripts cargados de entrada.
+- Menos sensación de “lag” al interactuar con botones, filtros y menú lateral.
+- Tablas más ágiles y menos costosas al escribir, ordenar o filtrar.
+- Plataforma más estable y fluida de forma general, no solo en `analisis-ventas`.
+
+## Detalles técnicos
+- Moveré `xlsx` fuera de `src/lib/excel.ts` de carga directa hacia `import()` bajo demanda, o separaré el parser pesado en un módulo lazy.
+- Reestructuraré rutas para usar `createLazyFileRoute` donde hoy se importa el componente completo en el archivo crítico.
+- Reharé cálculos duplicados en `AnalisisVentasPage` y, si hace falta, dividiré la tabla grande en componentes memoizados o con virtualización.
+- Revisaré el patrón de queries Supabase para evitar traer más filas/columnas de las necesarias y para no repetir lecturas costosas.
+- Mantendré intacta la lógica financiera ya aprobada; esta optimización será de performance y UX, no de negocio.
