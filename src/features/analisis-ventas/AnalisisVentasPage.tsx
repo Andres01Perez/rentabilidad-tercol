@@ -20,10 +20,6 @@ import {
   Landmark,
   Receipt,
 } from "lucide-react";
-import {
-  NativeBarList,
-  NativeLineChart,
-} from "@/components/charts/NativeMiniCharts";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -619,27 +615,6 @@ export function AnalisisVentasPage() {
     setSearch("");
   };
 
-  const monthlyChartData = React.useMemo(
-    () =>
-      analytics.monthlySeries.map((item) => ({
-        label: item.label,
-        values: {
-          ventas: item.ventas,
-          costo: item.costo,
-          margen: item.margen,
-        },
-      })),
-    [analytics.monthlySeries],
-  );
-
-  const dailyChartData = React.useMemo(
-    () =>
-      analytics.dailySeries
-        .slice(-18)
-        .map((item) => ({ label: item.label, value: item.ventas, tone: "primary" as const })),
-    [analytics.dailySeries],
-  );
-
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
       <PageHeader
@@ -835,31 +810,6 @@ export function AnalisisVentasPage() {
               valueClassName="text-2xl md:text-3xl"
             />
           </div>
-          {/* Series temporales */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="glass rounded-2xl border border-border/60 p-5">
-              <h3 className="text-sm font-semibold">Ventas, costo y margen por mes</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Comparativo mensual sin dependencias externas</p>
-              <div className="mt-4">
-                <NativeLineChart
-                  data={monthlyChartData}
-                  series={[
-                    { key: "ventas", label: "Ventas", colorVar: "--primary" },
-                    { key: "costo", label: "Costo", colorVar: "--muted-foreground" },
-                    { key: "margen", label: "Margen", colorVar: "--chart-3" },
-                  ]}
-                />
-              </div>
-            </div>
-            <div className="glass rounded-2xl border border-border/60 p-5">
-              <h3 className="text-sm font-semibold">Ventas por día</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Últimos 18 días con actividad en el período filtrado</p>
-              <div className="mt-4">
-                <NativeBarList data={dailyChartData} formatter={formatCurrency} />
-              </div>
-            </div>
-          </div>
-
           {/* Rankings */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <RankingCard title="Top vendedores · margen bruto" items={analytics.rankings.vendedores} />
