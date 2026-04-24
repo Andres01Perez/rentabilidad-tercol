@@ -519,6 +519,11 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     };
   }, [salesRows]);
 
+  const excludedRows = React.useMemo(
+    () => filteredRows.filter((row) => !row.computable),
+    [filteredRows],
+  );
+
   return {
     loading,
     hasLoadedOnce,
@@ -534,6 +539,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     dailySeries,
     rankings,
     uniques,
+    excludedRows,
     ctuMapSize: ctuMap.size,
     zeroCostCount: zeroCostSet.size,
   };
