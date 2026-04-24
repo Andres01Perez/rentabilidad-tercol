@@ -172,9 +172,9 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const vendedoresArr = vendedoresKey ? vendedoresKey.split("|") : null;
-      const dependenciasArr = dependenciasKey ? dependenciasKey.split("|") : null;
-      const tercerosArr = tercerosKey ? tercerosKey.split("|") : null;
+      const vendedoresArr = vendedoresKey ? vendedoresKey.split("|") : undefined;
+      const dependenciasArr = dependenciasKey ? dependenciasKey.split("|") : undefined;
+      const tercerosArr = tercerosKey ? tercerosKey.split("|") : undefined;
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
         p_sales_month: salesMonth,
         p_cost_month: toCostMonthDate(costPeriodMonth),
@@ -286,10 +286,10 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
         p_sales_month: salesMonth,
         p_cost_month: costPeriodMonth,
         p_financial_pct: financialDiscountPct,
-        p_vendedores: vendedoresKey ? vendedoresKey.split("|") : null,
-        p_dependencias: dependenciasKey ? dependenciasKey.split("|") : null,
-        p_terceros: tercerosKey ? tercerosKey.split("|") : null,
-        p_search: search || null,
+        p_vendedores: vendedoresKey ? vendedoresKey.split("|") : undefined,
+        p_dependencias: dependenciasKey ? dependenciasKey.split("|") : undefined,
+        p_terceros: tercerosKey ? tercerosKey.split("|") : undefined,
+        p_search: search || undefined,
         p_sort_key: sortKey,
         p_sort_dir: sortDir,
         p_offset: 0,
