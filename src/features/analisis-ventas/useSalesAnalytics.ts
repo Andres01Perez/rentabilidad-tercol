@@ -58,6 +58,12 @@ export interface FinancialDiscountOption {
   percentage: number;
 }
 
+export interface OperationalBreakdownItem {
+  id: string;
+  name: string;
+  percentage: number;
+}
+
 const MONTHS_ES_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
@@ -106,6 +112,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const [ctuMap, setCtuMap] = React.useState<Map<string, number>>(new Map());
   const [zeroCostSet, setZeroCostSet] = React.useState<Set<string>>(new Set());
   const [pctOperacional, setPctOperacional] = React.useState<number>(0);
+  const [operationalBreakdown, setOperationalBreakdown] = React.useState<OperationalBreakdownItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [hasAnySales, setHasAnySales] = React.useState(false);
