@@ -355,7 +355,20 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
                     {formatCurrency(r.precioNeto)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {r.ctuProm === null ? <span className="text-muted-foreground">—</span> : formatCurrency(r.ctuProm)}
+                    {r.ctuProm === null ? (
+                      <span
+                        className={cn(
+                          "inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+                          r.costoCero
+                            ? "border-rose-400/60 text-rose-600 dark:text-rose-300"
+                            : "border-amber-400/60 text-amber-700 dark:text-amber-300",
+                        )}
+                      >
+                        {r.costoCero ? "Costo 0" : "Sin costo"}
+                      </span>
+                    ) : (
+                      formatCurrency(r.ctuProm)
+                    )}
                   </TableCell>
                   <TableCell className={cn("text-right tabular-nums", r.margenUnit !== null && r.margenUnit < 0 && "text-rose-600")}>
                     {r.margenUnit === null ? "—" : formatCurrency(r.margenUnit)}
