@@ -669,6 +669,28 @@ export function AnalisisVentasPage() {
             </div>
           )}
 
+          {/* Aviso de líneas excluidas del cálculo de margen */}
+          {analytics.kpis.lineasExcluidas > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                <strong>{formatNumber(analytics.kpis.lineasExcluidas)}</strong> líneas
+                ({formatCurrency(analytics.kpis.ventasExcluidas)} en ventas) se excluyen del cálculo
+                de margen para evitar sesgo.
+              </span>
+              {analytics.kpis.lineasCostoCero > 0 && (
+                <Badge variant="outline" className="border-rose-300 bg-rose-50 text-rose-700">
+                  Costo 0: {formatNumber(analytics.kpis.lineasCostoCero)}
+                </Badge>
+              )}
+              {analytics.kpis.lineasSinCosto > 0 && (
+                <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">
+                  Sin costo: {formatNumber(analytics.kpis.lineasSinCosto)}
+                </Badge>
+              )}
+            </div>
+          )}
+
           {/* KPIs */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
             <KpiCard
@@ -810,10 +832,20 @@ export function AnalisisVentasPage() {
                         <TableCell className="text-right tabular-nums">{formatNumber(r.cantidad)}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatCurrency(r.precio_unitario ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {r.ctu === null ? <span className="text-muted-foreground">—</span> : formatCurrency(r.ctu)}
+                          {r.ctu !== null ? (
+                            formatCurrency(r.ctu)
+                          ) : r.costoCero ? (
+                            <Badge variant="outline" className="border-rose-300 bg-rose-50 text-[10px] font-medium text-rose-700">
+                              Costo 0
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] font-medium text-amber-700">
+                              Sin costo
+                            </Badge>
+                          )}
                         </TableCell>
-                        <TableCell className={cn("text-right tabular-nums", margenU < 0 && "text-rose-600")}>
-                          {formatCurrency(margenU)}
+                        <TableCell className={cn("text-right tabular-nums", r.computable && margenU < 0 && "text-rose-600")}>
+                          {r.computable ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums", isNeg && "font-semibold text-rose-600")}>
                           {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
