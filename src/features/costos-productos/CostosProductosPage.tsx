@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
 import { chunkedInsert } from "@/lib/excel";
-import { currentMonthDate, formatMonth, formatNumber } from "@/lib/period";
+import { currentMonthDate, formatMonth, formatNumber, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
 type ProductCost = {
@@ -141,7 +141,7 @@ const SECTIONS: Section[] = [
 
 export function CostosProductosPage() {
   const { user } = useAuth();
-  const [month, setMonth] = React.useState(currentMonthDate());
+  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
   const [rows, setRows] = React.useState<ProductCost[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
