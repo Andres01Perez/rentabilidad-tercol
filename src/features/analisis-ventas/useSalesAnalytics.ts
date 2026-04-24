@@ -387,7 +387,7 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
       margenPct,
       pctOperacional,
       operacionalMonto,
-      descuentoFinancieroPct,
+      descuentoFinancieroPct: financialDiscountPct,
       descuentoFinancieroMonto,
       ventasNetas,
       utilidad,
