@@ -515,7 +515,58 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      calc_rentabilidad: {
+        Args: {
+          p_cost_months: string[]
+          p_op_months: string[]
+          p_source_id: string
+          p_source_kind: string
+        }
+        Returns: Json
+      }
+      get_cost_month_summary: {
+        Args: { p_months: string[] }
+        Returns: {
+          month: string
+          product_count: number
+        }[]
+      }
+      get_period_catalog: { Args: never; Returns: Json }
+      get_sales_dashboard: {
+        Args: {
+          p_cost_month: string
+          p_dependencias?: string[]
+          p_financial_pct: number
+          p_op_month: string
+          p_sales_month: string
+          p_terceros?: string[]
+          p_vendedores?: string[]
+        }
+        Returns: Json
+      }
+      get_sales_detail: {
+        Args: {
+          p_cost_month: string
+          p_dependencias?: string[]
+          p_financial_pct: number
+          p_limit?: number
+          p_offset?: number
+          p_sales_month: string
+          p_search?: string
+          p_sort_dir?: string
+          p_sort_key?: string
+          p_terceros?: string[]
+          p_vendedores?: string[]
+        }
+        Returns: Json
+      }
+      get_sales_months: {
+        Args: never
+        Returns: {
+          month_value: string
+        }[]
+      }
+      get_source_options: { Args: { p_kind: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
