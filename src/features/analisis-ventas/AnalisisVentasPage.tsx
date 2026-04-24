@@ -422,11 +422,6 @@ export function AnalisisVentasPage() {
     setSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
   }, [analytics.salesMonths]);
 
-  React.useEffect(() => {
-    setCostPeriod((current) => pickDefaultMonth(analytics.salesMonths, current));
-    setOpPeriod((current) => pickDefaultMonth(analytics.salesMonths, current));
-  }, [analytics.salesMonths]);
-
   const filteredCount = React.useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     const numFilters = {
@@ -623,7 +618,17 @@ export function AnalisisVentasPage() {
           )}
           {/* Filtros sticky */}
           <div className="glass sticky top-16 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 p-4">
-            <DateRangePicker value={range} onChange={setRange} />
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Mes de ventas
+              </span>
+              <MonthSelect
+                value={salesMonth}
+                onValueChange={setSalesMonth}
+                className="w-44"
+                months={Math.max(analytics.salesMonths.length, 12)}
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de costos
