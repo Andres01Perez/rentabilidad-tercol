@@ -11,6 +11,8 @@ import {
   Percent,
   Package,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -180,9 +182,13 @@ export function CalculadoraPage() {
         opMonths: op.perMonth,
         avgOpPct: op.avgPct,
       });
-      const sinCosto = rows.filter((r) => r.ctuProm === null).length;
-      if (sinCosto > 0) {
-        toast.warning(`${sinCosto} productos sin costo en los meses elegidos.`);
+      const excluded = rows.filter((r) => r.ctuProm === null).length;
+      const cero = rows.filter((r) => r.costoCero).length;
+      if (excluded > 0) {
+        toast.warning(
+          `${excluded} productos excluidos del margen` +
+            (cero > 0 ? ` (${cero} con costo en cero)` : ""),
+        );
       } else {
         toast.success(`Rentabilidad calculada para ${rows.length} productos.`);
       }
@@ -202,10 +208,12 @@ export function CalculadoraPage() {
     let margenNeto = 0;
     let withMargen = 0;
     let sinCosto = 0;
+    let costoCero = 0;
     for (const r of result.rows) {
       precioTot += r.precioNeto * r.cantidad;
       if (r.ctuProm === null) {
         sinCosto++;
+        if (r.costoCero) costoCero++;
         continue;
       }
       costoTot += r.ctuProm * r.cantidad;
@@ -217,6 +225,8 @@ export function CalculadoraPage() {
       total: result.rows.length,
       withMargen,
       sinCosto,
+      costoCero,
+      sinRegistro: sinCosto - costoCero,
       precioTot,
       costoTot,
       margenBruto,
@@ -225,6 +235,12 @@ export function CalculadoraPage() {
       margenNetoPct: precioTot !== 0 ? (margenNeto / precioTot) * 100 : 0,
     };
   }, [result]);
+
+  const [showExcluded, setShowExcluded] = React.useState(false);
+  const excludedRows = React.useMemo(
+    () => (result ? result.rows.filter((r) => r.ctuProm === null) : []),
+    [result],
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
@@ -442,10 +458,87 @@ export function CalculadoraPage() {
       {result && kpis && (
         <>
           {kpis.sinCosto > 0 && (
-            <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4" />
-              {kpis.sinCosto} producto{kpis.sinCosto > 1 ? "s" : ""} sin costo en los meses elegidos.
-              Su margen aparece como "—".
+            <div className="rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>
+                    <strong>{kpis.sinCosto}</strong> producto{kpis.sinCosto > 1 ? "s" : ""} excluido
+                    {kpis.sinCosto > 1 ? "s" : ""} del cálculo de margen
+                    {kpis.costoCero > 0 && (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <strong>{kpis.costoCero}</strong> con costo en cero
+                      </>
+                    )}
+                    {kpis.sinRegistro > 0 && (
+                      <>
+                        {" "}
+                        · <strong>{kpis.sinRegistro}</strong> sin registro de costo
+                      </>
+                    )}
+                    .
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowExcluded((v) => !v)}
+                  className="h-7 gap-1 text-xs text-amber-900 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-500/20"
+                >
+                  {showExcluded ? (
+                    <>
+                      <ChevronUp className="h-3 w-3" /> Ocultar lista
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3" /> Ver lista
+                    </>
+                  )}
+                </Button>
+              </div>
+              {showExcluded && (
+                <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-amber-300/40 bg-white/60 p-2 dark:bg-black/20">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-white/95 text-left dark:bg-black/40">
+                      <tr className="border-b border-amber-300/40">
+                        <th className="px-2 py-1 font-semibold">Referencia</th>
+                        <th className="px-2 py-1 font-semibold">Descripción</th>
+                        <th className="px-2 py-1 font-semibold">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {excludedRows.map((r) => (
+                        <tr key={r.referencia} className="border-b border-amber-200/30 last:border-0">
+                          <td
+                            className="px-2 py-1 font-bold"
+                            style={{ fontFamily: "Montserrat, sans-serif" }}
+                          >
+                            {r.referencia}
+                          </td>
+                          <td className="px-2 py-1 text-muted-foreground">
+                            {r.descripcion ?? "—"}
+                          </td>
+                          <td className="px-2 py-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px]",
+                                r.costoCero
+                                  ? "border-rose-400/60 text-rose-700 dark:text-rose-300"
+                                  : "border-amber-400/60 text-amber-700 dark:text-amber-300",
+                              )}
+                            >
+                              {r.costoCero ? "Costo en cero" : "Sin registro"}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

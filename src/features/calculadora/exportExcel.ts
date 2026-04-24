@@ -81,6 +81,24 @@ export function exportRentabilidadExcel({
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet3), "Costos por mes");
 
+  // Hoja 4: Productos excluidos del margen
+  const excluded = rows.filter((r) => r.ctuProm === null);
+  if (excluded.length > 0) {
+    const sheet4: (string | number | null)[][] = [
+      ["Referencia", "Descripción", "Cantidad", "Precio neto", "Motivo"],
+    ];
+    for (const r of excluded) {
+      sheet4.push([
+        r.referencia,
+        r.descripcion,
+        r.cantidad,
+        r.precioNeto,
+        r.costoCero ? "Costo en cero" : "Sin registro de costo",
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet4), "Productos excluidos");
+  }
+
   const fileName = `rentabilidad-${source.option.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, fileName);
 }

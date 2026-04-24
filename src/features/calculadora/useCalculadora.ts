@@ -52,6 +52,8 @@ export interface RentabilidadRow {
   margenPct: number | null;
   margenNetoUnit: number | null;
   margenNetoPct: number | null;
+  /** True si el CTU promedio existe pero es <= 0 (excluido del margen). */
+  costoCero: boolean;
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -213,10 +215,11 @@ export async function fetchProductCostsByMonths(
     const batch = data ?? [];
     for (const r of batch) {
       if (r.ctu === null || r.ctu === undefined) continue;
+      const ctuNum = Number(r.ctu);
       const ref = String(r.referencia);
       const m = String(r.period_month);
       const cur = byRefMonth.get(ref) ?? new Map<string, number>();
-      cur.set(m, Number(r.ctu));
+      cur.set(m, ctuNum);
       byRefMonth.set(ref, cur);
     }
     if (batch.length < PAGE) break;
@@ -224,7 +227,8 @@ export async function fetchProductCostsByMonths(
   }
   const avgByRef = new Map<string, number>();
   for (const [ref, mmap] of byRefMonth) {
-    const vals = Array.from(mmap.values());
+    // Solo promediamos meses con costo > 0; un 0 distorsiona el margen al 100%.
+    const vals = Array.from(mmap.values()).filter((v) => v > 0);
     if (vals.length > 0) {
       avgByRef.set(ref, vals.reduce((a, b) => a + b, 0) / vals.length);
     }
@@ -286,9 +290,13 @@ export function computeRentabilidad(
   const opFactor = avgOpPct / 100;
   return items.map((it) => {
     const precioNeto = it.precio * (1 - it.descuentoPct / 100);
-    const ctuProm = costs.avgByRef.get(it.referencia) ?? null;
-    const ctuByMonth: Record<string, number | null> = {};
+    const rawCtu = costs.avgByRef.get(it.referencia);
+    const ctuProm = rawCtu === undefined ? null : rawCtu;
+    // Detectamos costo cero: existe el registro mensual pero todos sus CTU son <= 0.
     const mmap = costs.byRefMonth.get(it.referencia);
+    const hasAnyMonth = !!mmap && mmap.size > 0;
+    const costoCero = hasAnyMonth && ctuProm === null;
+    const ctuByMonth: Record<string, number | null> = {};
     for (const m of costMonths) {
       ctuByMonth[m] = mmap?.get(m) ?? null;
     }
@@ -316,6 +324,7 @@ export function computeRentabilidad(
       margenPct,
       margenNetoUnit,
       margenNetoPct,
+      costoCero,
     };
   });
 }
