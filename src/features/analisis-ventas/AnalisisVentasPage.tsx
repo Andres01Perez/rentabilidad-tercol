@@ -17,6 +17,8 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  Landmark,
+  Receipt,
 } from "lucide-react";
 import {
   NativeBarList,
@@ -32,6 +34,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MonthSelect } from "@/components/period/MonthSelect";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -70,12 +79,16 @@ function KpiCard({
   value,
   hint,
   tone = "default",
+  valueClassName,
+  hintClassName,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   hint?: string;
   tone?: "default" | "positive" | "negative" | "primary";
+  valueClassName?: string;
+  hintClassName?: string;
 }) {
   const toneClasses = {
     default: "from-card to-card",
@@ -96,8 +109,8 @@ function KpiCard({
         </span>
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       </div>
-      <p className="mt-2 truncate text-xl font-bold tracking-tight md:text-2xl">{value}</p>
-      {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
+      <p className={cn("mt-2 truncate text-xl font-bold tracking-tight md:text-2xl", valueClassName)}>{value}</p>
+      {hint && <p className={cn("mt-1 truncate text-xs text-muted-foreground", hintClassName)}>{hint}</p>}
     </div>
   );
 }
@@ -179,6 +192,27 @@ function MultiSelectFilter({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function OperationalSplitCard({
+  percentage,
+  amount,
+}: {
+  percentage: string;
+  amount: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card p-5 shadow-sm backdrop-blur">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Operacional
+        </span>
+        <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </div>
+      <p className="mt-2 truncate text-2xl font-bold tracking-tight md:text-3xl">{percentage}</p>
+      <p className="mt-1 truncate text-sm text-muted-foreground">{amount}</p>
+    </div>
   );
 }
 
@@ -400,6 +434,7 @@ export function AnalisisVentasPage() {
   const [vendedoresF, setVendedoresF] = React.useState<string[]>([]);
   const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
   const [tercerosF, setTercerosF] = React.useState<string[]>([]);
+  const [financialDiscountPct, setFinancialDiscountPct] = React.useState<number>(2.5);
   const [search, setSearch] = React.useState("");
   // useDeferredValue para que el input de búsqueda no bloquee el render
   // mientras se filtran/ordenan miles de filas.
@@ -423,6 +458,7 @@ export function AnalisisVentasPage() {
     salesMonth,
     costPeriodMonth: costPeriod,
     opPeriodMonth: opPeriod,
+    financialDiscountPct,
     filters: {
       vendedores: vendedoresF,
       dependencias: dependenciasF,
@@ -431,6 +467,17 @@ export function AnalisisVentasPage() {
     refreshKey,
   });
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
+  const discountOptions = React.useMemo(() => analytics.financialDiscounts, [analytics.financialDiscounts]);
+
+  React.useEffect(() => {
+    if (discountOptions.length === 0) return;
+    const defaultOption = discountOptions.find((item) => Math.abs(item.percentage - 2.5) < 0.001);
+    const selectedExists = discountOptions.some((item) => Math.abs(item.percentage - financialDiscountPct) < 0.001);
+    if (!selectedExists) {
+      setFinancialDiscountPct(defaultOption?.percentage ?? discountOptions[0].percentage);
+    }
+  }, [discountOptions, financialDiscountPct]);
+
 
   React.useEffect(() => {
     if (analytics.salesMonths.length === 0) return;
@@ -656,6 +703,26 @@ export function AnalisisVentasPage() {
               </span>
               <MonthSelect value={opPeriod} onValueChange={setOpPeriod} className="w-40" />
             </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Descuento financiero
+              </span>
+              <Select
+                value={String(financialDiscountPct)}
+                onValueChange={(value) => setFinancialDiscountPct(Number(value))}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {discountOptions.map((option) => (
+                    <SelectItem key={option.id} value={String(option.percentage)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <MultiSelectFilter
                 label="Vendedor"
@@ -710,12 +777,40 @@ export function AnalisisVentasPage() {
           )}
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <KpiCard
               icon={Wallet}
               label="Ventas totales"
               value={formatCurrency(analytics.kpis.ventas)}
               hint={`${formatNumber(analytics.kpis.lineas)} líneas`}
+              tone="primary"
+            />
+            <KpiCard
+              icon={PiggyBank}
+              label="Margen bruto en plata"
+              value={formatCurrency(analytics.kpis.margenBruto)}
+              hint={`Base computable: ${formatCurrency(analytics.kpis.ventasComputables)}`}
+              tone={analytics.kpis.margenBruto >= 0 ? "positive" : "negative"}
+            />
+            <KpiCard
+              icon={Percent}
+              label="Margen bruto %"
+              value={formatPercent(analytics.kpis.margenPct, 2)}
+              hint={`Descuento fin. ${formatPercent(analytics.kpis.descuentoFinancieroPct, 1)}`}
+              tone={analytics.kpis.margenPct >= 0 ? "positive" : "negative"}
+              valueClassName="text-2xl md:text-3xl"
+            />
+            <OperationalSplitCard
+              percentage={formatPercent(analytics.kpis.pctOperacional, 1)}
+              amount={formatCurrency(analytics.kpis.operacionalMonto)}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
+            <KpiCard
+              icon={Receipt}
+              label="Ventas netas"
+              value={formatCurrency(analytics.kpis.ventasNetas)}
+              hint={`Desc. financiero: ${formatCurrency(analytics.kpis.descuentoFinancieroMonto)}`}
               tone="primary"
             />
             <KpiCard
@@ -725,18 +820,19 @@ export function AnalisisVentasPage() {
               hint={`CTU mes ${costPeriod.slice(0, 7)}`}
             />
             <KpiCard
-              icon={PiggyBank}
-              label="Margen bruto"
-              value={formatCurrency(analytics.kpis.margenBruto)}
-              hint={formatPercent(analytics.kpis.margenPct, 2)}
-              tone={analytics.kpis.margenBruto >= 0 ? "positive" : "negative"}
+              icon={Landmark}
+              label="Utilidad operacional"
+              value={formatCurrency(analytics.kpis.utilidadOperacional)}
+              hint={`Utilidad: ${formatCurrency(analytics.kpis.utilidad)}`}
+              tone={analytics.kpis.utilidadOperacional >= 0 ? "positive" : "negative"}
             />
             <KpiCard
               icon={Percent}
-              label="Margen neto"
-              value={formatCurrency(analytics.kpis.margenNeto)}
-              hint={`${formatPercent(analytics.kpis.margenNetoPct, 2)} · op. ${formatPercent(analytics.pctOperacional, 1)}`}
-              tone={analytics.kpis.margenNeto >= 0 ? "positive" : "negative"}
+              label="Utilidad operacional %"
+              value={formatPercent(analytics.kpis.utilidadOperacionalPct, 2)}
+              hint={`${formatPercent(analytics.kpis.margenPct, 2)} - ${formatPercent(analytics.kpis.pctOperacional, 1)}`}
+              tone={analytics.kpis.utilidadOperacionalPct >= 0 ? "positive" : "negative"}
+              valueClassName="text-2xl md:text-3xl"
             />
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4 [&>*]:min-w-0">
@@ -773,10 +869,10 @@ export function AnalisisVentasPage() {
 
           {/* Rankings */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <RankingCard title="Top vendedores · margen" items={analytics.rankings.vendedores} />
-            <RankingCard title="Top dependencias · margen" items={analytics.rankings.dependencias} />
-            <RankingCard title="Top terceros · margen" items={analytics.rankings.terceros} />
-            <RankingCard title="Top productos · margen" items={analytics.rankings.productos} flagNegative />
+            <RankingCard title="Top vendedores · margen bruto" items={analytics.rankings.vendedores} />
+            <RankingCard title="Top dependencias · margen bruto" items={analytics.rankings.dependencias} />
+            <RankingCard title="Top terceros · margen bruto" items={analytics.rankings.terceros} />
+            <RankingCard title="Top productos · margen bruto" items={analytics.rankings.productos} flagNegative />
           </div>
 
           {/* Tabla detalle */}
