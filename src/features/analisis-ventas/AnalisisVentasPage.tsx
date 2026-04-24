@@ -613,7 +613,7 @@ export function AnalisisVentasPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-8 overflow-x-hidden px-4 py-10 sm:px-6 lg:px-10">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-10 sm:px-6 lg:px-10">
       <PageHeader
         icon={TrendingUp}
         eyebrow="Análisis"
@@ -651,7 +651,7 @@ export function AnalisisVentasPage() {
             </div>
           )}
           {/* Filtros sticky */}
-          <div className="glass sticky top-[4.5rem] z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
+          <div className="glass sticky top-14 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de ventas
