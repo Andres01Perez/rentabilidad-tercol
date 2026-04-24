@@ -35,7 +35,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
           label: r.referencia,
           value: (r.margenUnit ?? 0) * r.cantidad,
           meta: `${formatNumber(r.cantidad)} und`,
-          tone: ((r.margenUnit ?? 0) * r.cantidad) < 0 ? ("danger" as const) : ("primary" as const),
+          tone: (((r.margenUnit ?? 0) * r.cantidad) < 0 ? "danger" : "primary") as "danger" | "primary",
         })),
     [withMargen],
   );
@@ -49,7 +49,7 @@ export function RentabilidadCharts({ rows }: ChartsProps) {
           label: r.referencia,
           value: r.margenPct ?? 0,
           meta: formatCurrency(r.precioNeto),
-          tone: (r.margenPct ?? 0) < 0 ? ("danger" as const) : ("muted" as const),
+          tone: ((r.margenPct ?? 0) < 0 ? "danger" : "muted") as "danger" | "muted",
         })),
     [withMargen],
   );
