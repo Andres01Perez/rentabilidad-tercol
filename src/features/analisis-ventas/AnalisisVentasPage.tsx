@@ -16,6 +16,7 @@ import {
   ChevronsUpDown,
   Landmark,
   Receipt,
+  RefreshCw,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -458,36 +459,51 @@ export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
-  const [salesMonth, setSalesMonth] = React.useState<string>(previousMonthDefault);
-  const [costPeriod, setCostPeriod] = React.useState<string>(previousMonthDefault);
-  const [opPeriod, setOpPeriod] = React.useState<string>(previousMonthDefault);
-  const [vendedoresF, setVendedoresF] = React.useState<string[]>([]);
-  const [dependenciasF, setDependenciasF] = React.useState<string[]>([]);
-  const [tercerosF, setTercerosF] = React.useState<string[]>([]);
-  const [financialDiscountPct, setFinancialDiscountPct] = React.useState<number>(2.5);
+  // Estado borrador (lo que el usuario edita en la barra de filtros)
+  const [draftSalesMonth, setDraftSalesMonth] = React.useState<string>(previousMonthDefault);
+  const [draftCostPeriod, setDraftCostPeriod] = React.useState<string>(previousMonthDefault);
+  const [draftOpPeriod, setDraftOpPeriod] = React.useState<string>(previousMonthDefault);
+  const [draftVendedoresF, setDraftVendedoresF] = React.useState<string[]>([]);
+  const [draftDependenciasF, setDraftDependenciasF] = React.useState<string[]>([]);
+  const [draftTercerosF, setDraftTercerosF] = React.useState<string[]>([]);
+  const [draftFinancialDiscountPct, setDraftFinancialDiscountPct] = React.useState<number>(2.5);
+  // Estado aplicado (lo que efectivamente se envía a las RPCs)
+  const [applied, setApplied] = React.useState({
+    salesMonth: previousMonthDefault,
+    costPeriod: previousMonthDefault,
+    opPeriod: previousMonthDefault,
+    financialDiscountPct: 2.5,
+    vendedores: [] as string[],
+    dependencias: [] as string[],
+    terceros: [] as string[],
+  });
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
 
-  const filters = React.useMemo(
-    () => ({ vendedores: vendedoresF, dependencias: dependenciasF, terceros: tercerosF }),
-    [vendedoresF, dependenciasF, tercerosF],
+  const appliedFilters = React.useMemo(
+    () => ({
+      vendedores: applied.vendedores,
+      dependencias: applied.dependencias,
+      terceros: applied.terceros,
+    }),
+    [applied.vendedores, applied.dependencias, applied.terceros],
   );
 
   const analytics = useSalesAnalytics({
-    salesMonth,
-    costPeriodMonth: costPeriod,
-    opPeriodMonth: opPeriod,
-    financialDiscountPct,
-    filters,
+    salesMonth: applied.salesMonth,
+    costPeriodMonth: applied.costPeriod,
+    opPeriodMonth: applied.opPeriod,
+    financialDiscountPct: applied.financialDiscountPct,
+    filters: appliedFilters,
     refreshKey,
   });
 
   const detail = useSalesDetail({
-    salesMonth,
-    costPeriodMonth: costPeriod,
-    financialDiscountPct,
-    filters,
+    salesMonth: applied.salesMonth,
+    costPeriodMonth: applied.costPeriod,
+    financialDiscountPct: applied.financialDiscountPct,
+    filters: appliedFilters,
     search,
     sortKey,
     sortDir,
@@ -502,15 +518,27 @@ export function AnalisisVentasPage() {
   React.useEffect(() => {
     if (discountOptions.length === 0) return;
     const defaultOption = discountOptions.find((item) => Math.abs(item.percentage - 2.5) < 0.001);
-    const selectedExists = discountOptions.some((item) => Math.abs(item.percentage - financialDiscountPct) < 0.001);
+    const selectedExists = discountOptions.some(
+      (item) => Math.abs(item.percentage - draftFinancialDiscountPct) < 0.001,
+    );
     if (!selectedExists) {
-      setFinancialDiscountPct(defaultOption?.percentage ?? discountOptions[0].percentage);
+      const next = defaultOption?.percentage ?? discountOptions[0].percentage;
+      setDraftFinancialDiscountPct(next);
+      setApplied((prev) =>
+        Math.abs(prev.financialDiscountPct - next) < 0.001
+          ? prev
+          : { ...prev, financialDiscountPct: next },
+      );
     }
-  }, [discountOptions, financialDiscountPct]);
+  }, [discountOptions, draftFinancialDiscountPct]);
 
   React.useEffect(() => {
     if (analytics.salesMonths.length === 0) return;
-    setSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
+    setDraftSalesMonth((current) => pickDefaultMonth(analytics.salesMonths, current));
+    setApplied((prev) => {
+      const next = pickDefaultMonth(analytics.salesMonths, prev.salesMonth);
+      return next === prev.salesMonth ? prev : { ...prev, salesMonth: next };
+    });
   }, [analytics.salesMonths]);
 
   const toggleSort = React.useCallback((key: SortKey) => {
@@ -529,6 +557,53 @@ export function AnalisisVentasPage() {
   }, []);
 
   const hasAnyFilter = search.trim() !== "";
+
+  // ¿Hay diferencias entre borrador y aplicado?
+  const arraysEqual = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort();
+    const sb = [...b].sort();
+    for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+    return true;
+  };
+  const hasPendingChanges =
+    draftSalesMonth !== applied.salesMonth ||
+    draftCostPeriod !== applied.costPeriod ||
+    draftOpPeriod !== applied.opPeriod ||
+    Math.abs(draftFinancialDiscountPct - applied.financialDiscountPct) > 0.0001 ||
+    !arraysEqual(draftVendedoresF, applied.vendedores) ||
+    !arraysEqual(draftDependenciasF, applied.dependencias) ||
+    !arraysEqual(draftTercerosF, applied.terceros);
+
+  const handleApply = React.useCallback(() => {
+    setApplied({
+      salesMonth: draftSalesMonth,
+      costPeriod: draftCostPeriod,
+      opPeriod: draftOpPeriod,
+      financialDiscountPct: draftFinancialDiscountPct,
+      vendedores: draftVendedoresF,
+      dependencias: draftDependenciasF,
+      terceros: draftTercerosF,
+    });
+  }, [
+    draftSalesMonth,
+    draftCostPeriod,
+    draftOpPeriod,
+    draftFinancialDiscountPct,
+    draftVendedoresF,
+    draftDependenciasF,
+    draftTercerosF,
+  ]);
+
+  const handleDiscard = React.useCallback(() => {
+    setDraftSalesMonth(applied.salesMonth);
+    setDraftCostPeriod(applied.costPeriod);
+    setDraftOpPeriod(applied.opPeriod);
+    setDraftFinancialDiscountPct(applied.financialDiscountPct);
+    setDraftVendedoresF(applied.vendedores);
+    setDraftDependenciasF(applied.dependencias);
+    setDraftTercerosF(applied.terceros);
+  }, [applied]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-10 sm:px-6 lg:px-10">
@@ -574,8 +649,8 @@ export function AnalisisVentasPage() {
                 Mes de ventas
               </span>
               <MonthSelect
-                value={salesMonth}
-                onValueChange={setSalesMonth}
+                value={draftSalesMonth}
+                onValueChange={setDraftSalesMonth}
                 className="w-44"
                 options={salesMonthOptions}
               />
@@ -584,21 +659,21 @@ export function AnalisisVentasPage() {
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de costos
               </span>
-              <MonthSelect value={costPeriod} onValueChange={setCostPeriod} className="w-40" />
+              <MonthSelect value={draftCostPeriod} onValueChange={setDraftCostPeriod} className="w-40" />
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes operacional
               </span>
-              <MonthSelect value={opPeriod} onValueChange={setOpPeriod} className="w-40" />
+              <MonthSelect value={draftOpPeriod} onValueChange={setDraftOpPeriod} className="w-40" />
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Descuento financiero
               </span>
               <Select
-                value={String(financialDiscountPct)}
-                onValueChange={(value) => setFinancialDiscountPct(Number(value))}
+                value={String(draftFinancialDiscountPct)}
+                onValueChange={(value) => setDraftFinancialDiscountPct(Number(value))}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Selecciona" />
@@ -612,25 +687,47 @@ export function AnalisisVentasPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <MultiSelectFilter
                 label="Vendedor"
                 options={analytics.uniques.vendedores}
-                selected={vendedoresF}
-                onChange={setVendedoresF}
+                selected={draftVendedoresF}
+                onChange={setDraftVendedoresF}
               />
               <MultiSelectFilter
                 label="Dependencia"
                 options={analytics.uniques.dependencias}
-                selected={dependenciasF}
-                onChange={setDependenciasF}
+                selected={draftDependenciasF}
+                onChange={setDraftDependenciasF}
               />
               <MultiSelectFilter
                 label="Tercero"
                 options={analytics.uniques.terceros}
-                selected={tercerosF}
-                onChange={setTercerosF}
+                selected={draftTercerosF}
+                onChange={setDraftTercerosF}
               />
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {hasPendingChanges && (
+                <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  Cambios sin aplicar
+                </Badge>
+              )}
+              {hasPendingChanges && (
+                <Button variant="outline" size="sm" onClick={handleDiscard} className="gap-1.5">
+                  <X className="h-3.5 w-3.5" /> Descartar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={!hasPendingChanges || analytics.loading}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", analytics.loading && "animate-spin")} />
+                Actualizar
+              </Button>
             </div>
           </div>
 
@@ -704,7 +801,7 @@ export function AnalisisVentasPage() {
               icon={ShoppingCart}
               label="Costo total"
               value={formatCurrency(analytics.kpis.costo)}
-              hint={`CTU mes ${costPeriod.slice(0, 7)}`}
+              hint={`CTU mes ${applied.costPeriod.slice(0, 7)}`}
             />
             <KpiCard
               icon={Landmark}
