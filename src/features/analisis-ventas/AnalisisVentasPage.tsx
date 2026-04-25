@@ -801,7 +801,7 @@ export function AnalisisVentasPage() {
               icon={ShoppingCart}
               label="Costo total"
               value={formatCurrency(analytics.kpis.costo)}
-              hint={`CTU mes ${costPeriod.slice(0, 7)}`}
+              hint={`CTU mes ${applied.costPeriod.slice(0, 7)}`}
             />
             <KpiCard
               icon={Landmark}
