@@ -1,89 +1,44 @@
-## Objetivo
+## Mejorar layout de la barra de filtros sticky en Análisis de Ventas
 
-Eliminar la actualización automática del dashboard y la tabla detalle cada vez que el usuario cambia un filtro. En su lugar, los cambios se mantienen como "borrador" en la UI y solo se ejecutan las consultas (RPCs `get_sales_dashboard` y `get_sales_detail`) cuando el usuario hace clic en un botón **Actualizar**. Esto reduce drásticamente la carga sobre Supabase y elimina los lapsos de lentitud percibidos al combinar varios filtros.
+Archivo a modificar: `src/features/analisis-ventas/AnalisisVentasPage.tsx` (líneas 645–732).
 
-## Alcance
+La funcionalidad (estado draft/applied, hooks, handlers) **no cambia**. Solo se ajusta el contenedor sticky y la disposición visual.
 
-Solo se modifica la página de **Análisis de Ventas** (`/analisis-ventas`). No se tocan RPCs, índices, ni otras pantallas (Calculadora, Costos, etc.). La estrategia de virtualización, memoización e índices ya implementada se mantiene intacta.
+### Problemas detectados
 
-## Diseño de UX
+1. El sticky usa `top-14` y queda completamente pegado al header sin respiración visual.
+2. El grupo "Actualizar / Descartar / Cambios sin aplicar" comparte la misma fila que los selectores, pero éstos tienen una etiqueta encima (`Mes de ventas`, etc.), por lo que los botones quedan alineados arriba mientras los selects quedan abajo → desalineación visual.
+3. Los `MultiSelectFilter` (Vendedor / Dependencia / Tercero) son botones sin etiqueta superior, y aparecen mezclados a la derecha sin un agrupamiento claro.
 
-Se separan dos conceptos en el estado:
+### Cambios propuestos
 
-- **Estado borrador (`draft`)**: lo que el usuario está editando en la barra de filtros. Cambia instantáneamente con cada selección.
-- **Estado aplicado (`applied`)**: lo que efectivamente se envía a las RPCs. Solo cambia al pulsar **Actualizar**.
+**1. Margen superior del sticky**
+- Reemplazar `sticky top-14` por `sticky top-16` y agregar `mt-2` al contenedor para dejar un colchón visual entre el header y la barra de filtros.
 
-Comportamiento:
+**2. Reestructurar el contenedor en dos zonas**
 
-1. Al cargar la página por primera vez, el estado borrador y el aplicado son iguales (defaults actuales) y se ejecuta una consulta inicial automáticamente — igual que hoy.
-2. Al cambiar cualquier filtro (Mes ventas, Mes costos, Mes operacional, Descuento financiero, Vendedor, Dependencia, Tercero) solo se actualiza el borrador. El dashboard NO se recalcula.
-3. Aparece un indicador visual "Cambios sin aplicar" (badge ámbar) junto al botón **Actualizar** cuando borrador ≠ aplicado.
-4. El botón **Actualizar** (con icono refresh) ejecuta el commit: copia borrador → aplicado, lo que dispara las RPCs.
-5. Botón secundario **Descartar** restaura el borrador al estado aplicado actual (solo visible cuando hay cambios pendientes).
-6. Atajo: tecla `Enter` con foco en la barra de filtros también aplica.
-7. La búsqueda de texto del detalle (`search`) y el ordenamiento (`sortKey/sortDir`) **siguen siendo en tiempo real** (ya tienen debounce de 250ms en el hook y no provocan recálculo del dashboard, solo del detalle). Esto lo confirmaremos manteniendo `search/sortKey/sortDir` fuera del flujo de "borrador".
+Cambiar de un único `flex flex-wrap items-center gap-3` a una distribución en dos bloques con `justify-between`:
 
 ```text
-┌─ Filtros (borrador) ────────────────────────────────────────────┐
-│ Mes ventas ▾ │ Mes costos ▾ │ Mes op ▾ │ Desc. fin. ▾          │
-│ [Vendedor] [Dependencia] [Tercero]   ⚠ Cambios sin aplicar     │
-│                                       [Descartar] [↻ Actualizar]│
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  [Mes ventas ▼] [Mes costos ▼] [Mes oper. ▼] [Desc. fin. ▼]            │
+│  [Vendedor ▼] [Dependencia ▼] [Tercero ▼]    │  [⚠ Pendientes][Descartar][Actualizar]│
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Cambios técnicos
+Estructura:
+- Contenedor exterior: `flex flex-wrap items-end justify-between gap-4` (clave: `items-end` alinea TODO al borde inferior, así los botones de acción quedan a la misma altura que los selects que tienen label encima).
+- **Bloque izquierdo** (filtros): `flex flex-wrap items-end gap-3` que contiene los 4 selects con label + los 3 multi-select (los multi-select se envuelven en su propio `div` con `gap-2` para mantenerlos agrupados visualmente).
+- **Bloque derecho** (acciones): `flex flex-wrap items-center gap-2` con el badge "Cambios sin aplicar", "Descartar" y "Actualizar". Como no llevan label encima, `items-end` del padre los pega al fondo y quedan alineados con la base de los selects.
 
-**Archivo único a modificar**: `src/features/analisis-ventas/AnalisisVentasPage.tsx`
+**3. Consistencia visual de los multi-select**
+- Para que los `MultiSelectFilter` (Vendedor / Dependencia / Tercero) no se vean "flotando" sin etiqueta junto a los selects con label, agregarles también una etiqueta superior con el mismo estilo (`text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`) — por ejemplo "Filtros adicionales" como header del grupo, o etiquetas individuales reutilizando el mismo `label` que ya reciben.
 
-1. Renombrar los state setters actuales para que representen el **borrador**:
-   - `salesMonth` → `draftSalesMonth` / `setDraftSalesMonth`
-   - `costPeriod` → `draftCostPeriod`
-   - `opPeriod` → `draftOpPeriod`
-   - `financialDiscountPct` → `draftFinancialDiscountPct`
-   - `vendedoresF` → `draftVendedoresF`
-   - `dependenciasF` → `draftDependenciasF`
-   - `tercerosF` → `draftTercerosF`
+Opción elegida: una sola etiqueta de grupo "Filtros adicionales" sobre los tres botones, para evitar redundancia (cada botón ya muestra su nombre).
 
-2. Agregar un único objeto de estado **aplicado** inicializado con los mismos defaults:
-   ```ts
-   const [applied, setApplied] = React.useState({
-     salesMonth: previousMonthDefault,
-     costPeriod: previousMonthDefault,
-     opPeriod: previousMonthDefault,
-     financialDiscountPct: 2.5,
-     vendedores: [] as string[],
-     dependencias: [] as string[],
-     terceros: [] as string[],
-   });
-   ```
+### Resultado
 
-3. Los hooks `useSalesAnalytics` y `useSalesDetail` reciben los valores de **`applied`**, no del borrador. Así, cambios al borrador no disparan re-fetch.
-
-4. Funciones `handleApply()` y `handleDiscard()`:
-   ```ts
-   const handleApply = () => setApplied({ ...draft });
-   const handleDiscard = () => { /* setDraftX(applied.x) para cada campo */ };
-   ```
-
-5. Detectar cambios pendientes con `hasPendingChanges` (comparación shallow + arrays ordenadas por valor).
-
-6. Mantener compatibles los efectos existentes:
-   - El efecto que ajusta `salesMonth` cuando llegan los `salesMonths` debe actualizar **ambos** (`draftSalesMonth` y `applied.salesMonth`) en la primera carga, para que la consulta inicial use un mes válido sin requerir clic.
-   - El efecto que ajusta `financialDiscountPct` por defecto idéntico: actualizar borrador y aplicado.
-
-7. La barra de filtros sticky agrega al final un bloque con: badge "Cambios sin aplicar" condicional + botones **Descartar** (variant outline) y **Actualizar** (variant default, con icono `RefreshCw` de lucide-react). El botón **Actualizar** se deshabilita si `!hasPendingChanges` para evitar refetch redundante; opcionalmente permitir clic siempre como "forzar refresh".
-
-8. Mantener `refreshKey` tal cual (lo dispara la subida de Excel) — sigue forzando re-fetch como hoy.
-
-## Qué NO cambia
-
-- Hooks `useSalesAnalytics` / `useSalesDetail`: sin cambios.
-- RPCs en Supabase: sin cambios.
-- Búsqueda y ordenamiento de la tabla detalle: siguen en tiempo real con debounce existente.
-- Listas de "uniques" para los popovers de filtro: siguen viniendo de `analytics.uniques` (datos del último estado aplicado), lo cual es correcto.
-
-## Resultado esperado
-
-- Cambiar 3 filtros consecutivos pasa de 3 round-trips RPC a 0 hasta que el usuario aplica.
-- Un solo clic en **Actualizar** dispara una sola consulta consolidada al dashboard + una al detalle.
-- Carga inicial sigue siendo automática (sin necesidad de clic).
+- Margen visible entre el header y la barra sticky.
+- Filtros a la izquierda alineados por su borde inferior, todos a la misma altura.
+- Botones de acción (Actualizar / Descartar / badge) anclados al fondo a la derecha, alineados con la base de los selects.
+- Sin cambios en lógica, hooks ni en `handleApply` / `handleDiscard` / `hasPendingChanges`.
