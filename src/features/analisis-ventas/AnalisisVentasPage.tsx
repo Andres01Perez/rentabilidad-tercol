@@ -649,8 +649,8 @@ export function AnalisisVentasPage() {
                 Mes de ventas
               </span>
               <MonthSelect
-                value={salesMonth}
-                onValueChange={setSalesMonth}
+                value={draftSalesMonth}
+                onValueChange={setDraftSalesMonth}
                 className="w-44"
                 options={salesMonthOptions}
               />
@@ -659,21 +659,21 @@ export function AnalisisVentasPage() {
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de costos
               </span>
-              <MonthSelect value={costPeriod} onValueChange={setCostPeriod} className="w-40" />
+              <MonthSelect value={draftCostPeriod} onValueChange={setDraftCostPeriod} className="w-40" />
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes operacional
               </span>
-              <MonthSelect value={opPeriod} onValueChange={setOpPeriod} className="w-40" />
+              <MonthSelect value={draftOpPeriod} onValueChange={setDraftOpPeriod} className="w-40" />
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Descuento financiero
               </span>
               <Select
-                value={String(financialDiscountPct)}
-                onValueChange={(value) => setFinancialDiscountPct(Number(value))}
+                value={String(draftFinancialDiscountPct)}
+                onValueChange={(value) => setDraftFinancialDiscountPct(Number(value))}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Selecciona" />
@@ -687,25 +687,47 @@ export function AnalisisVentasPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <MultiSelectFilter
                 label="Vendedor"
                 options={analytics.uniques.vendedores}
-                selected={vendedoresF}
-                onChange={setVendedoresF}
+                selected={draftVendedoresF}
+                onChange={setDraftVendedoresF}
               />
               <MultiSelectFilter
                 label="Dependencia"
                 options={analytics.uniques.dependencias}
-                selected={dependenciasF}
-                onChange={setDependenciasF}
+                selected={draftDependenciasF}
+                onChange={setDraftDependenciasF}
               />
               <MultiSelectFilter
                 label="Tercero"
                 options={analytics.uniques.terceros}
-                selected={tercerosF}
-                onChange={setTercerosF}
+                selected={draftTercerosF}
+                onChange={setDraftTercerosF}
               />
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {hasPendingChanges && (
+                <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  Cambios sin aplicar
+                </Badge>
+              )}
+              {hasPendingChanges && (
+                <Button variant="outline" size="sm" onClick={handleDiscard} className="gap-1.5">
+                  <X className="h-3.5 w-3.5" /> Descartar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={!hasPendingChanges || analytics.loading}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", analytics.loading && "animate-spin")} />
+                Actualizar
+              </Button>
             </div>
           </div>
 
