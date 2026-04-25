@@ -644,6 +644,28 @@ export function AnalisisVentasPage() {
           )}
           {/* Filtros sticky */}
           <div className="glass sticky top-14 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
+            <div className="flex flex-wrap items-center gap-2">
+              {hasPendingChanges && (
+                <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  Cambios sin aplicar
+                </Badge>
+              )}
+              {hasPendingChanges && (
+                <Button variant="outline" size="sm" onClick={handleDiscard} className="gap-1.5">
+                  <X className="h-3.5 w-3.5" /> Descartar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={!hasPendingChanges || analytics.loading}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", analytics.loading && "animate-spin")} />
+                Actualizar
+              </Button>
+            </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes de ventas
@@ -706,28 +728,6 @@ export function AnalisisVentasPage() {
                 selected={draftTercerosF}
                 onChange={setDraftTercerosF}
               />
-            </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              {hasPendingChanges && (
-                <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
-                  <AlertTriangle className="h-3 w-3" />
-                  Cambios sin aplicar
-                </Badge>
-              )}
-              {hasPendingChanges && (
-                <Button variant="outline" size="sm" onClick={handleDiscard} className="gap-1.5">
-                  <X className="h-3.5 w-3.5" /> Descartar
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={handleApply}
-                disabled={!hasPendingChanges || analytics.loading}
-                className="gap-1.5"
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5", analytics.loading && "animate-spin")} />
-                Actualizar
-              </Button>
             </div>
           </div>
 
