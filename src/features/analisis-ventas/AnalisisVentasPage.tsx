@@ -643,7 +643,80 @@ export function AnalisisVentasPage() {
             </div>
           )}
           {/* Filtros sticky */}
-          <div className="glass sticky top-14 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
+          <div className="glass sticky top-16 z-30 mt-2 flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-sm backdrop-blur-xl">
+            {/* Bloque izquierdo: filtros */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Mes de ventas
+                </span>
+                <MonthSelect
+                  value={draftSalesMonth}
+                  onValueChange={setDraftSalesMonth}
+                  className="w-44"
+                  options={salesMonthOptions}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Mes de costos
+                </span>
+                <MonthSelect value={draftCostPeriod} onValueChange={setDraftCostPeriod} className="w-40" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Mes operacional
+                </span>
+                <MonthSelect value={draftOpPeriod} onValueChange={setDraftOpPeriod} className="w-40" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Descuento financiero
+                </span>
+                <Select
+                  value={String(draftFinancialDiscountPct)}
+                  onValueChange={(value) => setDraftFinancialDiscountPct(Number(value))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Selecciona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {discountOptions.map((option) => (
+                      <SelectItem key={option.id} value={String(option.percentage)}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Filtros adicionales
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <MultiSelectFilter
+                    label="Vendedor"
+                    options={analytics.uniques.vendedores}
+                    selected={draftVendedoresF}
+                    onChange={setDraftVendedoresF}
+                  />
+                  <MultiSelectFilter
+                    label="Dependencia"
+                    options={analytics.uniques.dependencias}
+                    selected={draftDependenciasF}
+                    onChange={setDraftDependenciasF}
+                  />
+                  <MultiSelectFilter
+                    label="Tercero"
+                    options={analytics.uniques.terceros}
+                    selected={draftTercerosF}
+                    onChange={setDraftTercerosF}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloque derecho: acciones, alineadas al fondo */}
             <div className="flex flex-wrap items-center gap-2">
               {hasPendingChanges && (
                 <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-800">
@@ -665,69 +738,6 @@ export function AnalisisVentasPage() {
                 <RefreshCw className={cn("h-3.5 w-3.5", analytics.loading && "animate-spin")} />
                 Actualizar
               </Button>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Mes de ventas
-              </span>
-              <MonthSelect
-                value={draftSalesMonth}
-                onValueChange={setDraftSalesMonth}
-                className="w-44"
-                options={salesMonthOptions}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Mes de costos
-              </span>
-              <MonthSelect value={draftCostPeriod} onValueChange={setDraftCostPeriod} className="w-40" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Mes operacional
-              </span>
-              <MonthSelect value={draftOpPeriod} onValueChange={setDraftOpPeriod} className="w-40" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Descuento financiero
-              </span>
-              <Select
-                value={String(draftFinancialDiscountPct)}
-                onValueChange={(value) => setDraftFinancialDiscountPct(Number(value))}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {discountOptions.map((option) => (
-                    <SelectItem key={option.id} value={String(option.percentage)}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <MultiSelectFilter
-                label="Vendedor"
-                options={analytics.uniques.vendedores}
-                selected={draftVendedoresF}
-                onChange={setDraftVendedoresF}
-              />
-              <MultiSelectFilter
-                label="Dependencia"
-                options={analytics.uniques.dependencias}
-                selected={draftDependenciasF}
-                onChange={setDraftDependenciasF}
-              />
-              <MultiSelectFilter
-                label="Tercero"
-                options={analytics.uniques.terceros}
-                selected={draftTercerosF}
-                onChange={setDraftTercerosF}
-              />
             </div>
           </div>
 
