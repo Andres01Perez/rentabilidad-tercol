@@ -1,6 +1,8 @@
 import * as React from "react";
 import { Package, Upload, Loader2, Search, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate, getRouteApi } from "@tanstack/react-router";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -25,32 +27,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
+import type { WizardField, ImportWizardDialog as ImportWizardDialogType } from "@/components/excel/ImportWizardDialog";
 import { chunkedInsert } from "@/lib/excel";
-import { currentMonthDate, formatMonth, formatNumber, previousMonth } from "@/lib/period";
+import { formatMonth, formatNumber } from "@/lib/period";
 import { cn } from "@/lib/utils";
+import {
+  productCostsKey,
+  productCostsQueryOptions,
+  type ProductCostRow,
+} from "./queries";
 
-type ProductCost = {
-  id: string;
-  grupo: string | null;
-  referencia: string;
-  descripcion: string | null;
-  cant: number | null;
-  cumat: number | null;
-  cumo: number | null;
-  cunago: number | null;
-  ctmat: number | null;
-  ctmo: number | null;
-  ctsit: number | null;
-  pct_part: number | null;
-  cifu: number | null;
-  mou: number | null;
-  ctu: number | null;
-  ct: number | null;
-  puv: number | null;
-  preciotot: number | null;
-  pct_cto: number | null;
-};
+// Lazy: SheetJS pesa ~80 KiB. Solo se descarga al abrir "Subir Excel".
+const ImportWizardDialog = React.lazy(() =>
+  import("@/components/excel/ImportWizardDialog").then((m) => ({
+    default: m.ImportWizardDialog,
+  })),
+) as unknown as typeof ImportWizardDialogType;
+
+const routeApi = getRouteApi("/_app/costos-productos");
+
+type ProductCost = ProductCostRow;
 
 type ColKey =
   | "grupo" | "referencia" | "descripcion" | "cant"
@@ -141,9 +137,19 @@ const SECTIONS: Section[] = [
 
 export function CostosProductosPage() {
   const { user } = useCurrentUser();
-  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
-  const [rows, setRows] = React.useState<ProductCost[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { month } = routeApi.useSearch();
+  const setMonth = React.useCallback(
+    (m: string) => {
+      void navigate({
+        to: "/costos-productos",
+        search: (prev: Record<string, unknown>) => ({ ...prev, month: m }),
+      });
+    },
+    [navigate],
+  );
+  const { data: rows, isFetching } = useSuspenseQuery(productCostsQueryOptions(month));
   const [search, setSearch] = React.useState("");
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [expanded, setExpanded] = React.useState<{ cu: boolean; ct: boolean }>({
@@ -164,27 +170,12 @@ export function CostosProductosPage() {
     [expanded],
   );
 
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("product_costs")
-      .select("*")
-      .eq("period_month", month)
-      .order("referencia", { ascending: true })
-      .limit(5000);
-    if (error) {
-      toast.error("Error cargando costos");
-      setLoading(false);
-      return;
-    }
-    // Stale-while-revalidate: solo reemplazamos al recibir respuesta exitosa.
-    setRows((data ?? []) as ProductCost[]);
-    setLoading(false);
-  }, [month]);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+  const refresh = React.useCallback(
+    (m: string) => {
+      void queryClient.invalidateQueries({ queryKey: productCostsKey(m) });
+    },
+    [queryClient],
+  );
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -225,12 +216,12 @@ export function CostosProductosPage() {
           />
         </div>
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          {loading && rows.length > 0 && <Loader2 className="h-3 w-3 animate-spin" />}
+          {isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
           {formatMonth(month)} · {filtered.length} productos
         </p>
       </div>
 
-      <div className={cn("mt-4 glass overflow-hidden rounded-2xl transition-opacity", loading && rows.length > 0 && "opacity-60")}>
+      <div className={cn("mt-4 glass overflow-hidden rounded-2xl transition-opacity", isFetching && "opacity-60")}>
         <div className="max-h-[calc(100vh-280px)] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
@@ -279,13 +270,7 @@ export function CostosProductosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={visibleColCount} className="h-32 text-center text-muted-foreground">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                  </TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
+              {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-3">
@@ -335,17 +320,19 @@ export function CostosProductosPage() {
       </div>
 
       {uploadOpen && (
-        <CostosUploadWizard
-          defaultMonth={month}
-          onClose={() => setUploadOpen(false)}
-          onDone={(m) => {
-            setUploadOpen(false);
-            setMonth(m);
-            void load();
-          }}
-          userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
-        />
+        <React.Suspense fallback={null}>
+          <CostosUploadWizard
+            defaultMonth={month}
+            onClose={() => setUploadOpen(false)}
+            onDone={(m) => {
+              setUploadOpen(false);
+              setMonth(m);
+              refresh(m);
+            }}
+            userId={user?.id ?? null}
+            userName={user?.name ?? "Sistema"}
+          />
+        </React.Suspense>
       )}
     </div>
   );

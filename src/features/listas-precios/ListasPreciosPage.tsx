@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Tags, Plus, Eye, RefreshCw, Trash2, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
+import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -31,28 +32,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ImportWizardDialog, type WizardField } from "@/components/excel/ImportWizardDialog";
+import type { WizardField } from "@/components/excel/ImportWizardDialog";
 import { chunkedInsert } from "@/lib/excel";
 import { formatCurrency } from "@/lib/period";
-import { cn } from "@/lib/utils";
+import {
+  PRICE_LISTS_KEY,
+  priceListsQueryOptions,
+  priceListItemsQueryOptions,
+  type PriceListRow,
+} from "./queries";
 
-type PriceList = {
-  id: string;
-  name: string;
-  created_by_name: string;
-  created_at: string;
-  updated_at: string;
-  updated_by_name: string | null;
-  items_count: number;
-};
-
-type PriceItem = {
-  id: string;
-  referencia: string;
-  descripcion: string | null;
-  unidad_empaque: string | null;
-  precio: number | null;
-};
+// Lazy: el wizard de Excel pesa ~80 KiB (SheetJS). Solo se carga cuando el
+// usuario abre crear/reemplazar. Importamos el tipo del componente para
+// preservar los generics (ColKey) tras React.lazy.
+import type { ImportWizardDialog as ImportWizardDialogType } from "@/components/excel/ImportWizardDialog";
+const ImportWizardDialog = React.lazy(() =>
+  import("@/components/excel/ImportWizardDialog").then((m) => ({
+    default: m.ImportWizardDialog,
+  })),
+) as unknown as typeof ImportWizardDialogType;
 
 type ColKey = "referencia" | "descripcion" | "unidad_empaque" | "precio";
 
@@ -83,44 +81,16 @@ const WIZARD_FIELDS: WizardField<ColKey>[] = [
 
 export function ListasPreciosPage() {
   const { user } = useCurrentUser();
-  const [lists, setLists] = React.useState<PriceList[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const queryClient = useQueryClient();
+  const { data: lists, isFetching } = useSuspenseQuery(priceListsQueryOptions());
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [viewing, setViewing] = React.useState<PriceList | null>(null);
-  const [replacing, setReplacing] = React.useState<PriceList | null>(null);
-  const [deleting, setDeleting] = React.useState<PriceList | null>(null);
+  const [viewing, setViewing] = React.useState<PriceListRow | null>(null);
+  const [replacing, setReplacing] = React.useState<PriceListRow | null>(null);
+  const [deleting, setDeleting] = React.useState<PriceListRow | null>(null);
 
-  const loadLists = React.useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("price_lists")
-      .select("id, name, created_by_name, created_at, updated_at, updated_by_name, price_list_items(count)")
-      .order("updated_at", { ascending: false });
-    if (error) {
-      console.error(error);
-      toast.error("No se pudieron cargar las listas");
-      setLoading(false);
-      return;
-    }
-    const mapped: PriceList[] = (data ?? []).map((r: typeof data extends (infer U)[] ? U : never) => ({
-      id: r.id,
-      name: r.name,
-      created_by_name: r.created_by_name,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      updated_by_name: r.updated_by_name,
-      items_count:
-        Array.isArray(r.price_list_items) && r.price_list_items[0]
-          ? (r.price_list_items[0] as { count: number }).count
-          : 0,
-    }));
-    setLists(mapped);
-    setLoading(false);
-  }, []);
-
-  React.useEffect(() => {
-    void loadLists();
-  }, [loadLists]);
+  const refresh = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: PRICE_LISTS_KEY });
+  }, [queryClient]);
 
   const handleDelete = async () => {
     if (!deleting) return;
@@ -133,7 +103,7 @@ export function ListasPreciosPage() {
     await supabase.from("price_list_items").delete().eq("price_list_id", deleting.id);
     toast.success("Lista eliminada");
     setDeleting(null);
-    void loadLists();
+    refresh();
   };
 
   return (
@@ -151,7 +121,7 @@ export function ListasPreciosPage() {
         }
       />
 
-      <div className={cn("mt-8 glass rounded-2xl p-1 transition-opacity", loading && lists.length > 0 && "opacity-60")}>
+      <div className="mt-8 glass rounded-2xl p-1 transition-opacity" data-fetching={isFetching || undefined}>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -164,13 +134,7 @@ export function ListasPreciosPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && lists.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                </TableCell>
-              </TableRow>
-            ) : lists.length === 0 ? (
+            {lists.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                   Aún no hay listas. Crea la primera con el botón de arriba.
@@ -207,28 +171,32 @@ export function ListasPreciosPage() {
       </div>
 
       {createOpen && (
-        <CreateListDialog
-          onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            setCreateOpen(false);
-            void loadLists();
-          }}
-          userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
-        />
+        <React.Suspense fallback={null}>
+          <CreateListDialog
+            onClose={() => setCreateOpen(false)}
+            onCreated={() => {
+              setCreateOpen(false);
+              refresh();
+            }}
+            userId={user?.id ?? null}
+            userName={user?.name ?? "Sistema"}
+          />
+        </React.Suspense>
       )}
 
       {replacing && (
-        <ReplaceListDialog
-          list={replacing}
-          onClose={() => setReplacing(null)}
-          onDone={() => {
-            setReplacing(null);
-            void loadLists();
-          }}
-          userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
-        />
+        <React.Suspense fallback={null}>
+          <ReplaceListDialog
+            list={replacing}
+            onClose={() => setReplacing(null)}
+            onDone={() => {
+              setReplacing(null);
+              refresh();
+            }}
+            userId={user?.id ?? null}
+            userName={user?.name ?? "Sistema"}
+          />
+        </React.Suspense>
       )}
 
       <ItemsSheet list={viewing} onClose={() => setViewing(null)} />
@@ -334,7 +302,7 @@ function ReplaceListDialog({
   userId,
   userName,
 }: {
-  list: PriceList;
+  list: PriceListRow;
   onClose: () => void;
   onDone: () => void;
   userId: string | null;
@@ -390,27 +358,12 @@ function ReplaceListDialog({
   );
 }
 
-function ItemsSheet({ list, onClose }: { list: PriceList | null; onClose: () => void }) {
-  const [items, setItems] = React.useState<PriceItem[]>([]);
-  const [loading, setLoading] = React.useState(false);
+function ItemsSheet({ list, onClose }: { list: PriceListRow | null; onClose: () => void }) {
   const [search, setSearch] = React.useState("");
-
   React.useEffect(() => {
-    if (!list) return;
-    setLoading(true);
-    setSearch("");
-    void supabase
-      .from("price_list_items")
-      .select("id, referencia, descripcion, unidad_empaque, precio")
-      .eq("price_list_id", list.id)
-      .order("referencia", { ascending: true })
-      .limit(5000)
-      .then(({ data, error }) => {
-        if (error) toast.error("Error cargando items");
-        setItems(data ?? []);
-        setLoading(false);
-      });
+    if (list) setSearch("");
   }, [list]);
+  const { data: items = [], isLoading } = useQuery(priceListItemsQueryOptions(list?.id ?? null));
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -441,7 +394,7 @@ function ItemsSheet({ list, onClose }: { list: PriceList | null; onClose: () => 
           </div>
         </div>
         <div className="mt-4 max-h-[calc(100vh-200px)] overflow-y-auto px-4 pb-6">
-          {loading ? (
+          {isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
