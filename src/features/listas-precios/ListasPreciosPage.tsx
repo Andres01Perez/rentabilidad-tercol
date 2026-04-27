@@ -337,7 +337,7 @@ function ReplaceListDialog({
   list: PriceList;
   onClose: () => void;
   onDone: () => void;
-  userId: string;
+  userId: string | null;
   userName: string;
 }) {
   const handleConfirm = async (rows: Record<ColKey, string | number | null>[]) => {
