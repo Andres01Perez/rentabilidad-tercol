@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Briefcase, Plus, Loader2 } from "lucide-react";
+import { Briefcase, ArrowLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -15,56 +15,41 @@ import { NegotiationCalculator } from "./NegotiationCalculator";
 
 export type { NegotiationRow };
 
+type Mode = { kind: "list" } | { kind: "edit"; id: string } | { kind: "new" };
+
 export function NegociacionesPage() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const { data: rows = [], isLoading: loading } = useQuery(negotiationsQueryOptions());
 
-  // Selección actual: id real, null = sin selección, "new" = borrador en memoria.
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  // Cuando es borrador local sin guardar:
-  const [isNew, setIsNew] = React.useState(false);
-
-  // Auto-seleccionar la primera negociación al cargar.
-  React.useEffect(() => {
-    if (selectedId === null && !isNew && rows.length > 0) {
-      setSelectedId(rows[0].id);
-    }
-  }, [rows, selectedId, isNew]);
+  const [mode, setMode] = React.useState<Mode>({ kind: "list" });
 
   const selected = React.useMemo(
-    () => rows.find((r) => r.id === selectedId) ?? null,
-    [rows, selectedId],
+    () => (mode.kind === "edit" ? rows.find((r) => r.id === mode.id) ?? null : null),
+    [rows, mode],
   );
 
-  // Pre-cargar items de la negociación seleccionada (para que el editor los tenga al toque).
   const { data: items, isFetching: itemsLoading } = useQuery(
-    negotiationItemsQueryOptions(isNew ? null : selectedId),
+    negotiationItemsQueryOptions(mode.kind === "edit" ? mode.id : null),
   );
 
-  const handleNew = () => {
-    setIsNew(true);
-    setSelectedId(null);
-  };
-
-  const handleSelect = (id: string) => {
-    setIsNew(false);
-    setSelectedId(id);
-  };
+  const handleNew = () => setMode({ kind: "new" });
+  const handleEdit = (id: string) => setMode({ kind: "edit", id });
+  const handleBack = () => setMode({ kind: "list" });
 
   const handleSaved = (id: string) => {
-    setIsNew(false);
-    setSelectedId(id);
     void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ["calc"] });
+    setMode({ kind: "edit", id });
   };
 
   const handleDeleted = () => {
-    setSelectedId(null);
-    setIsNew(false);
     void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ["calc"] });
+    setMode({ kind: "list" });
   };
+
+  const inEditor = mode.kind !== "list";
 
   return (
     <div className="mx-auto max-w-[1700px] px-4 py-8 sm:px-6 lg:px-8">
@@ -72,29 +57,29 @@ export function NegociacionesPage() {
         icon={Briefcase}
         eyebrow="Análisis"
         title="Negociaciones"
-        description="Cotiza en tiempo real: añade referencias y observa cómo cambia la rentabilidad. La meta mínima de margen es del 36%."
+        description={
+          inEditor
+            ? "Edita la negociación: añade referencias y observa la rentabilidad en tiempo real. Meta mínima 36%."
+            : "Lista de negociaciones. Haz clic en una para abrir la calculadora o crea una nueva."
+        }
         actions={
-          <Button
-            onClick={handleNew}
-            className="bg-gradient-brand text-white shadow-elegant"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Nueva negociación
-          </Button>
+          inEditor ? (
+            <Button variant="outline" size="sm" onClick={handleBack}>
+              <ArrowLeft className="mr-1 h-4 w-4" /> Volver a negociaciones
+            </Button>
+          ) : null
         }
       />
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-        <NegotiationsList
-          rows={rows}
-          loading={loading}
-          selectedId={isNew ? "__new__" : selectedId}
-          isNew={isNew}
-          onSelect={handleSelect}
-          onNew={handleNew}
-        />
-
-        {isNew ? (
+      <div className="mt-8">
+        {mode.kind === "list" ? (
+          <NegotiationsList
+            rows={rows}
+            loading={loading}
+            onEdit={handleEdit}
+            onNew={handleNew}
+          />
+        ) : mode.kind === "new" ? (
           <NegotiationCalculator
             key="new"
             negotiation={null}
@@ -104,7 +89,7 @@ export function NegociacionesPage() {
             userName={user?.name ?? "Sistema"}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
-            onCancel={() => setIsNew(false)}
+            onCancel={handleBack}
           />
         ) : selected ? (
           <NegotiationCalculator
@@ -116,16 +101,14 @@ export function NegociacionesPage() {
             userName={user?.name ?? "Sistema"}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
+            onCancel={handleBack}
           />
         ) : (
-          <div className="glass flex h-[60vh] items-center justify-center rounded-2xl border border-border/60 text-sm text-muted-foreground">
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Cargando negociaciones…
-              </div>
-            ) : (
-              "Selecciona una negociación o crea una nueva."
-            )}
+          <div className="glass flex h-[40vh] items-center justify-center rounded-2xl border border-border/60 text-sm text-muted-foreground">
+            Esta negociación ya no existe.{" "}
+            <button onClick={handleBack} className="ml-2 text-primary underline">
+              Volver
+            </button>
           </div>
         )}
       </div>
