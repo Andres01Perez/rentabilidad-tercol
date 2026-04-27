@@ -342,6 +342,8 @@ function CentersTab() {
   );
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: COST_CENTERS_KEY });
+    // Activar/desactivar centros cambia el % operacional efectivo: refrescar calculadora.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   }, [queryClient]);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<CostCenter | null>(null);
