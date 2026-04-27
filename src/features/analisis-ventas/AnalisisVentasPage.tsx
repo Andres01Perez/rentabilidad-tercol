@@ -476,6 +476,159 @@ function DetailVirtualTable({
   );
 }
 
+// ===================== Tabla por grupo =====================
+
+const GROUP_COLS: Array<{
+  key: GroupSortKey;
+  label: string;
+  align: "left" | "right";
+}> = [
+  { key: "grupo", label: "Grupo", align: "left" },
+  { key: "cantidad", label: "Cantidad", align: "right" },
+  { key: "ventas", label: "Ventas totales", align: "right" },
+  { key: "margen", label: "Margen bruto $", align: "right" },
+  { key: "margenPct", label: "Margen bruto %", align: "right" },
+  { key: "participacion", label: "% Participación", align: "right" },
+];
+
+function GroupSortableHead({
+  label,
+  sortKey,
+  current,
+  dir,
+  onClick,
+  align,
+}: {
+  label: string;
+  sortKey: GroupSortKey;
+  current: GroupSortKey;
+  dir: SortDir;
+  onClick: (k: GroupSortKey) => void;
+  align: "left" | "right";
+}) {
+  const active = current === sortKey;
+  return (
+    <th
+      className={cn(
+        "h-10 px-3 text-xs font-medium border-b border-border/40 bg-card/95",
+        align === "right" ? "text-right" : "text-left",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+          align === "right" && "ml-auto",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        <span>{label}</span>
+        {active ? (
+          dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronsUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+}
+
+const GroupTable = React.memo(function GroupTable({
+  rows,
+  sortKey,
+  sortDir,
+  onToggleSort,
+}: {
+  rows: GroupRow[];
+  sortKey: GroupSortKey;
+  sortDir: SortDir;
+  onToggleSort: (k: GroupSortKey) => void;
+}) {
+  const totals = React.useMemo(() => {
+    return rows.reduce(
+      (acc, r) => {
+        acc.cantidad += r.cantidad;
+        acc.ventas += r.ventas;
+        acc.margenBruto += r.margenBruto;
+        acc.ventasNetas += r.ventasNetas;
+        acc.participacion += r.participacionPct;
+        return acc;
+      },
+      { cantidad: 0, ventas: 0, margenBruto: 0, ventasNetas: 0, participacion: 0 },
+    );
+  }, [rows]);
+
+  const totalMarginPct =
+    totals.ventasNetas !== 0 ? (totals.margenBruto / totals.ventasNetas) * 100 : null;
+
+  return (
+    <div className="mt-4 max-h-[calc(100vh-200px)] min-h-[400px] overflow-auto rounded-xl border border-border/40">
+      <table className="w-full caption-bottom text-sm">
+        <thead className="sticky top-0 z-10">
+          <tr>
+            {GROUP_COLS.map((c) => (
+              <GroupSortableHead
+                key={c.key}
+                label={c.label}
+                sortKey={c.key}
+                current={sortKey}
+                dir={sortDir}
+                onClick={onToggleSort}
+                align={c.align}
+              />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={GROUP_COLS.length} className="py-8 text-center text-sm text-muted-foreground">
+                Sin datos para el período y filtros seleccionados.
+              </td>
+            </tr>
+          ) : (
+            rows.map((r) => {
+              const isNeg$ = r.margenBruto < 0;
+              const isNegPct = (r.margenPct ?? 0) < 0;
+              return (
+                <tr key={r.grupo} className="border-b border-border/40 hover:bg-accent/30">
+                  <td className="px-3 py-2 font-medium">{r.grupo}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatNumber(r.cantidad)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.ventas)}</td>
+                  <td className={cn("px-3 py-2 text-right tabular-nums", isNeg$ && "text-rose-600")}>
+                    {formatCurrency(r.margenBruto)}
+                  </td>
+                  <td className={cn("px-3 py-2 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")}>
+                    {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatPercent(r.participacionPct, 1)}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="border-t-2 border-border/60 bg-muted/40 font-semibold">
+              <td className="px-3 py-2">Total</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatNumber(totals.cantidad)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(totals.ventas)}</td>
+              <td className={cn("px-3 py-2 text-right tabular-nums", totals.margenBruto < 0 && "text-rose-600")}>
+                {formatCurrency(totals.margenBruto)}
+              </td>
+              <td className={cn("px-3 py-2 text-right tabular-nums", (totalMarginPct ?? 0) < 0 && "text-rose-600")}>
+                {totalMarginPct === null ? "—" : formatPercent(totalMarginPct, 1)}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatPercent(totals.participacion, 1)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+});
+
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
