@@ -153,7 +153,7 @@ const financialDiscountsQueryOptions = () => ({
 });
 
 const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
-  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters } = args;
+  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
   const vKey = filters.vendedores.join("|");
   const dKey = filters.dependencias.join("|");
   const tKey = filters.terceros.join("|");
@@ -168,6 +168,7 @@ const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
       vKey,
       dKey,
       tKey,
+      refreshKey,
     ] as const,
     queryFn: async (): Promise<DashboardData> => {
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
@@ -196,7 +197,6 @@ const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
 };
 
 export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
-  const { refreshKey } = args;
   const monthsQ = useQuery(salesMonthsQueryOptions());
   const discountsQ = useQuery(financialDiscountsQueryOptions());
   const dashQ = useQuery(dashboardQueryOptions(args));
@@ -205,9 +205,6 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
   const data = dashQ.data ?? EMPTY_DATA;
   const loading = dashQ.isFetching;
   const hasLoadedOnce = !dashQ.isLoading;
-  // refreshKey: si cambia, invalida el cache forzando refetch en el próximo render.
-  // Lo usamos solo cuando se sube nuevo Excel, no es ruta caliente.
-  void refreshKey;
 
   // Estabilizamos el objeto de retorno para que componentes consumidores
   // memoizados (KpiCard, MultiSelectFilter, etc.) no vean nuevas referencias

@@ -19,6 +19,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -466,6 +467,7 @@ function DetailVirtualTable({
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
+  const queryClient = useQueryClient();
   const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
   // Estado borrador (lo que el usuario edita en la barra de filtros)
   const [draftSalesMonth, setDraftSalesMonth] = React.useState<string>(previousMonthDefault);
@@ -910,7 +912,16 @@ export function AnalisisVentasPage() {
           <UploadVentasDialog
             open={uploadOpen}
             onOpenChange={setUploadOpen}
-            onUploaded={() => setRefreshKey((k) => k + 1)}
+            onUploaded={() => {
+              // Tras importar: invalidamos TODAS las queries de esta sección
+              // (dashboard, detalle, meses disponibles, descuentos financieros).
+              // Sin esto, el cache de 60s/5min mostraría datos viejos y el
+              // usuario percibiría que la importación no funcionó.
+              void queryClient.invalidateQueries({ queryKey: ["sales-analytics"] });
+              // Y también las queries de calculadora que dependen de ventas.
+              void queryClient.invalidateQueries({ queryKey: ["calc"] });
+              setRefreshKey((k) => k + 1);
+            }}
           />
         </React.Suspense>
       )}

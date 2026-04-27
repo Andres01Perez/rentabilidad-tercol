@@ -90,6 +90,11 @@ export function ListasPreciosPage() {
 
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: PRICE_LISTS_KEY });
+    // Calculadora y negociaciones consumen las listas de precios:
+    // invalidamos sus caches para que vean los cambios al instante.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
+    void queryClient.invalidateQueries({ queryKey: ["price-lists-light"] });
+    void queryClient.invalidateQueries({ queryKey: ["price-list-items"] });
   }, [queryClient]);
 
   const handleDelete = async () => {

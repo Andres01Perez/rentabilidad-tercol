@@ -82,6 +82,8 @@ function AssignmentsTab() {
   );
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: operationalCostsKey(month) });
+    // Calculadora consume estos % operacionales: invalidamos su cache.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   }, [queryClient, month]);
   const [editing, setEditing] = React.useState<Assignment | null>(null);
   const [creating, setCreating] = React.useState(false);
@@ -340,6 +342,8 @@ function CentersTab() {
   );
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: COST_CENTERS_KEY });
+    // Activar/desactivar centros cambia el % operacional efectivo: refrescar calculadora.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   }, [queryClient]);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<CostCenter | null>(null);
