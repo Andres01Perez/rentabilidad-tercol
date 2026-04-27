@@ -1,39 +1,25 @@
 import * as React from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { referenceSearchQueryOptions, type MasterReferenceRow } from "./queries";
 
-export type MasterReference = {
-  referencia: string;
-  descripcion: string | null;
-};
+export type MasterReference = MasterReferenceRow;
 
+/**
+ * Búsqueda de referencias maestras.
+ * - Debounce de 250 ms para no martillar la BD mientras se escribe.
+ * - Resultados cacheados 5 min en React Query: repetir la misma búsqueda
+ *   (muy común al añadir varias referencias seguidas) es instantáneo.
+ */
 export function useReferenceSearch(query: string, debounceMs = 250) {
-  const [results, setResults] = React.useState<MasterReference[]>([]);
-  const [loading, setLoading] = React.useState(false);
-
+  const [debounced, setDebounced] = React.useState(query);
   React.useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const handle = setTimeout(async () => {
-      const escaped = q.replace(/[%,()]/g, " ");
-      const { data, error } = await supabase
-        .from("master_references" as never)
-        .select("referencia, descripcion")
-        .or(`referencia.ilike.%${escaped}%,descripcion.ilike.%${escaped}%`)
-        .limit(20);
-      if (!error && data) {
-        setResults(data as MasterReference[]);
-      } else {
-        setResults([]);
-      }
-      setLoading(false);
-    }, debounceMs);
+    const handle = setTimeout(() => setDebounced(query), debounceMs);
     return () => clearTimeout(handle);
   }, [query, debounceMs]);
 
+  const q = debounced.trim();
+  const { data, isFetching } = useQuery(referenceSearchQueryOptions(q));
+  const results = q.length >= 2 ? data ?? [] : [];
+  const loading = q.length >= 2 && isFetching;
   return { results, loading };
 }

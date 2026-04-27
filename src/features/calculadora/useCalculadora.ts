@@ -1,5 +1,10 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  monthCatalogQueryOptions,
+  sourceOptionsQueryOptions,
+} from "./queries";
 
 export type SourceKind = "price_list" | "negotiation";
 
@@ -56,112 +61,24 @@ export interface RentabilidadRow {
   costoCero: boolean;
 }
 
-function uniqueSorted(values: string[]): string[] {
-  return Array.from(new Set(values)).sort((a, b) => b.localeCompare(a));
-}
-
-/** Catálogo de meses disponibles en product_costs y operational_costs. */
+/**
+ * Catálogo de meses disponibles. Implementación sobre React Query: una sola
+ * llamada al RPC `get_period_catalog` cacheada 5 min. Antes paginábamos
+ * `product_costs` y `operational_costs` desde el cliente.
+ */
 export function useMonthCatalog() {
-  const [costMonths, setCostMonths] = React.useState<string[]>([]);
-  const [opMonths, setOpMonths] = React.useState<string[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const PAGE = 1000;
-      // product_costs
-      const cm: string[] = [];
-      let from = 0;
-      while (true) {
-        const { data } = await supabase
-          .from("product_costs")
-          .select("period_month")
-          .range(from, from + PAGE - 1);
-        const batch = data ?? [];
-        for (const r of batch) cm.push(String(r.period_month));
-        if (batch.length < PAGE) break;
-        from += PAGE;
-      }
-      const om: string[] = [];
-      from = 0;
-      while (true) {
-        const { data } = await supabase
-          .from("operational_costs")
-          .select("period_month")
-          .range(from, from + PAGE - 1);
-        const batch = data ?? [];
-        for (const r of batch) om.push(String(r.period_month));
-        if (batch.length < PAGE) break;
-        from += PAGE;
-      }
-      if (cancelled) return;
-      setCostMonths(uniqueSorted(cm));
-      setOpMonths(uniqueSorted(om));
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { costMonths, opMonths, loading };
+  const { data, isLoading } = useQuery(monthCatalogQueryOptions());
+  return {
+    costMonths: data?.costMonths ?? [],
+    opMonths: data?.opMonths ?? [],
+    loading: isLoading,
+  };
 }
 
 /** Lista de fuentes según el tipo elegido. */
 export function useSourceOptions(kind: SourceKind) {
-  const [options, setOptions] = React.useState<SourceOption[]>([]);
-  const [loading, setLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      if (kind === "price_list") {
-        const { data } = await supabase
-          .from("price_lists")
-          .select("id, name")
-          .order("updated_at", { ascending: false });
-        const list = data ?? [];
-        const counts = await Promise.all(
-          list.map((l) =>
-            supabase
-              .from("price_list_items")
-              .select("id", { count: "exact", head: true })
-              .eq("price_list_id", l.id)
-              .then((r) => r.count ?? 0),
-          ),
-        );
-        if (!cancelled) {
-          setOptions(
-            list.map((l, i) => ({ id: l.id, name: l.name, itemsCount: counts[i] })),
-          );
-        }
-      } else {
-        const { data } = await supabase
-          .from("negotiations")
-          .select("id, name, items_count, total")
-          .order("updated_at", { ascending: false });
-        if (!cancelled) {
-          setOptions(
-            (data ?? []).map((n) => ({
-              id: n.id,
-              name: n.name,
-              itemsCount: n.items_count,
-              total: Number(n.total ?? 0),
-            })),
-          );
-        }
-      }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [kind]);
-
-  return { options, loading };
+  const { data, isFetching } = useQuery(sourceOptionsQueryOptions(kind));
+  return { options: data ?? [], loading: isFetching };
 }
 
 /** Trae los items de la fuente elegida normalizados. */

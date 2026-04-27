@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ---------- Tipos públicos (compatibles con la versión anterior) ----------
@@ -117,83 +118,71 @@ function toCostMonthDate(salesMonth: string): string {
   return salesMonth;
 }
 
-export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
-  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
-  const [data, setData] = React.useState<DashboardData>(EMPTY_DATA);
-  const [salesMonths, setSalesMonths] = React.useState<string[]>([]);
-  const [financialDiscounts, setFinancialDiscounts] = React.useState<FinancialDiscountOption[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
+// =====================================================================
+// Query options reutilizables (cache compartido entre montajes)
+// =====================================================================
 
-  // Estabilizamos la dependencia de filtros por su contenido (no por referencia).
-  const vendedoresKey = filters.vendedores.join("|");
-  const dependenciasKey = filters.dependencias.join("|");
-  const tercerosKey = filters.terceros.join("|");
+const salesMonthsQueryOptions = () => ({
+  queryKey: ["sales-analytics", "months"] as const,
+  staleTime: 5 * 60_000,
+  queryFn: async (): Promise<string[]> => {
+    const { data, error } = await supabase.rpc("get_sales_months");
+    if (error) throw error;
+    return ((data ?? []) as Array<{ month_value: string }>).map((r) =>
+      String(r.month_value),
+    );
+  },
+});
 
-  // 1) Catálogo de meses de ventas (1 RPC)
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: rows, error } = await supabase.rpc("get_sales_months");
-      if (cancelled) return;
-      if (error) {
-        console.error("get_sales_months", error);
-        return;
-      }
-      const months = (rows ?? []).map((r) => String(r.month_value));
-      setSalesMonths(months);
-    })();
-    return () => { cancelled = true; };
-  }, [refreshKey]);
+const financialDiscountsQueryOptions = () => ({
+  queryKey: ["sales-analytics", "financial-discounts"] as const,
+  staleTime: 5 * 60_000,
+  queryFn: async (): Promise<FinancialDiscountOption[]> => {
+    const { data, error } = await supabase
+      .from("financial_discounts")
+      .select("id, label, percentage")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      label: r.label,
+      percentage: Number(r.percentage ?? 0),
+    }));
+  },
+});
 
-  // 2) Descuentos financieros (catálogo pequeño)
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("financial_discounts")
-        .select("id, label, percentage")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        console.error("financial_discounts", error);
-        return;
-      }
-      setFinancialDiscounts((data ?? []).map((r) => ({
-        id: r.id, label: r.label, percentage: Number(r.percentage ?? 0),
-      })));
-    })();
-    return () => { cancelled = true; };
-  }, [refreshKey]);
-
-  // 3) Dashboard completo (1 RPC)
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const vendedoresArr = vendedoresKey ? vendedoresKey.split("|") : undefined;
-      const dependenciasArr = dependenciasKey ? dependenciasKey.split("|") : undefined;
-      const tercerosArr = tercerosKey ? tercerosKey.split("|") : undefined;
+const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
+  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters } = args;
+  const vKey = filters.vendedores.join("|");
+  const dKey = filters.dependencias.join("|");
+  const tKey = filters.terceros.join("|");
+  return {
+    queryKey: [
+      "sales-analytics",
+      "dashboard",
+      salesMonth,
+      costPeriodMonth,
+      opPeriodMonth,
+      financialDiscountPct,
+      vKey,
+      dKey,
+      tKey,
+    ] as const,
+    queryFn: async (): Promise<DashboardData> => {
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
         p_sales_month: salesMonth,
         p_cost_month: toCostMonthDate(costPeriodMonth),
         p_op_month: toCostMonthDate(opPeriodMonth),
         p_financial_pct: financialDiscountPct,
-        p_vendedores: vendedoresArr,
-        p_dependencias: dependenciasArr,
-        p_terceros: tercerosArr,
+        p_vendedores: vKey ? vKey.split("|") : undefined,
+        p_dependencias: dKey ? dKey.split("|") : undefined,
+        p_terceros: tKey ? tKey.split("|") : undefined,
       });
-      if (cancelled) return;
-      if (error) {
-        console.error("get_sales_dashboard", error);
-        setLoading(false);
-        setHasLoadedOnce(true);
-        return;
-      }
+      if (error) throw error;
       const j = (json ?? {}) as Record<string, unknown>;
-      const next: DashboardData = {
-        kpis: { ...EMPTY_KPIS, ...(j.kpis as Partial<DashboardKpis> ?? {}) } as DashboardKpis,
+      return {
+        kpis: { ...EMPTY_KPIS, ...((j.kpis as Partial<DashboardKpis>) ?? {}) } as DashboardKpis,
         monthlySeries: (j.monthlySeries as MonthlySeries[]) ?? [],
         dailySeries: (j.dailySeries as DailySeries[]) ?? [],
         rankings: (j.rankings as DashboardData["rankings"]) ?? EMPTY_DATA.rankings,
@@ -202,12 +191,23 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
         ctuMapSize: Number(j.ctuMapSize ?? 0),
         hasAnySales: Boolean(j.hasAnySales),
       };
-      setData(next);
-      setLoading(false);
-      setHasLoadedOnce(true);
-    })();
-    return () => { cancelled = true; };
-  }, [salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, vendedoresKey, dependenciasKey, tercerosKey, refreshKey]);
+    },
+  };
+};
+
+export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
+  const { refreshKey } = args;
+  const monthsQ = useQuery(salesMonthsQueryOptions());
+  const discountsQ = useQuery(financialDiscountsQueryOptions());
+  const dashQ = useQuery(dashboardQueryOptions(args));
+  const salesMonths = monthsQ.data ?? [];
+  const financialDiscounts = discountsQ.data ?? [];
+  const data = dashQ.data ?? EMPTY_DATA;
+  const loading = dashQ.isFetching;
+  const hasLoadedOnce = !dashQ.isLoading;
+  // refreshKey: si cambia, invalida el cache forzando refetch en el próximo render.
+  // Lo usamos solo cuando se sube nuevo Excel, no es ruta caliente.
+  void refreshKey;
 
   // Estabilizamos el objeto de retorno para que componentes consumidores
   // memoizados (KpiCard, MultiSelectFilter, etc.) no vean nuevas referencias
@@ -274,58 +274,69 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
     filters, search, sortKey, sortDir,
     limit = 500, refreshKey, enabled = true,
   } = args;
+  const vKey = filters.vendedores.join("|");
+  const dKey = filters.dependencias.join("|");
+  const tKey = filters.terceros.join("|");
 
-  const [rows, setRows] = React.useState<DetailRow[]>([]);
-  const [total, setTotal] = React.useState(0);
-  const [loading, setLoading] = React.useState(false);
-
-  const vendedoresKey = filters.vendedores.join("|");
-  const dependenciasKey = filters.dependencias.join("|");
-  const tercerosKey = filters.terceros.join("|");
-
+  // Debounce ligero para búsqueda/filtros: la queryKey solo cambia cuando se
+  // estabiliza el input.
+  const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   React.useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    setLoading(true);
-    const handle = setTimeout(async () => {
+    const h = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(h);
+  }, [search]);
+
+  const q = useQuery({
+    queryKey: [
+      "sales-analytics",
+      "detail",
+      salesMonth,
+      costPeriodMonth,
+      financialDiscountPct,
+      vKey,
+      dKey,
+      tKey,
+      debouncedSearch,
+      sortKey,
+      sortDir,
+      limit,
+      refreshKey,
+    ] as const,
+    enabled,
+    queryFn: async () => {
       const { data, error } = await supabase.rpc("get_sales_detail", {
         p_sales_month: salesMonth,
         p_cost_month: costPeriodMonth,
         p_financial_pct: financialDiscountPct,
-        p_vendedores: vendedoresKey ? vendedoresKey.split("|") : undefined,
-        p_dependencias: dependenciasKey ? dependenciasKey.split("|") : undefined,
-        p_terceros: tercerosKey ? tercerosKey.split("|") : undefined,
-        p_search: search || undefined,
+        p_vendedores: vKey ? vKey.split("|") : undefined,
+        p_dependencias: dKey ? dKey.split("|") : undefined,
+        p_terceros: tKey ? tKey.split("|") : undefined,
+        p_search: debouncedSearch || undefined,
         p_sort_key: sortKey,
         p_sort_dir: sortDir,
         p_offset: 0,
         p_limit: limit,
       });
-      if (cancelled) return;
-      if (error) {
-        console.error("get_sales_detail", error);
-        setLoading(false);
-        return;
-      }
+      if (error) throw error;
       const j = (data ?? {}) as { rows?: DetailRow[]; total?: number };
-      setRows((j.rows ?? []).map((r) => ({
-        ...r,
-        cantidad: Number(r.cantidad),
-        valor_total: Number(r.valor_total),
-        precio_unitario: r.precio_unitario === null ? null : Number(r.precio_unitario),
-        ctu: r.ctu === null ? null : Number(r.ctu),
-        precioUnitarioNeto: r.precioUnitarioNeto === null ? null : Number(r.precioUnitarioNeto),
-        margenUnitario: r.margenUnitario === null ? null : Number(r.margenUnitario),
-        margenPct: r.margenPct === null ? null : Number(r.margenPct),
-      })));
-      setTotal(Number(j.total ?? 0));
-      setLoading(false);
-    }, 250); // debounce ligero para búsqueda y filtros
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [enabled, salesMonth, costPeriodMonth, financialDiscountPct, vendedoresKey, dependenciasKey, tercerosKey, search, sortKey, sortDir, limit, refreshKey]);
-
-  return { rows, total, loading };
+      return {
+        rows: (j.rows ?? []).map((r) => ({
+          ...r,
+          cantidad: Number(r.cantidad),
+          valor_total: Number(r.valor_total),
+          precio_unitario: r.precio_unitario === null ? null : Number(r.precio_unitario),
+          ctu: r.ctu === null ? null : Number(r.ctu),
+          precioUnitarioNeto: r.precioUnitarioNeto === null ? null : Number(r.precioUnitarioNeto),
+          margenUnitario: r.margenUnitario === null ? null : Number(r.margenUnitario),
+          margenPct: r.margenPct === null ? null : Number(r.margenPct),
+        })),
+        total: Number(j.total ?? 0),
+      };
+    },
+  });
+  return {
+    rows: q.data?.rows ?? [],
+    total: q.data?.total ?? 0,
+    loading: q.isFetching,
+  };
 }
