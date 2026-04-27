@@ -8,24 +8,12 @@ import {
   NEGOTIATIONS_KEY,
   negotiationsQueryOptions,
   negotiationItemsQueryOptions,
+  type NegotiationRow,
 } from "./queries";
 import { NegotiationsList } from "./NegotiationsList";
 import { NegotiationCalculator } from "./NegotiationCalculator";
 
-export type NegotiationRow = {
-  id: string;
-  name: string;
-  notes: string | null;
-  total: number;
-  items_count: number;
-  source_price_list_id: string | null;
-  cost_months: string[];
-  min_margin_pct: number;
-  created_by_name: string;
-  updated_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type { NegotiationRow };
 
 export function NegociacionesPage() {
   const { user } = useCurrentUser();
