@@ -535,6 +535,20 @@ export type Database = {
         }[]
       }
       get_period_catalog: { Args: never; Returns: Json }
+      get_sales_by_group: {
+        Args: {
+          p_cost_month: string
+          p_dependencias?: string[]
+          p_financial_pct: number
+          p_sales_month: string
+          p_search?: string
+          p_sort_dir?: string
+          p_sort_key?: string
+          p_terceros?: string[]
+          p_vendedores?: string[]
+        }
+        Returns: Json
+      }
       get_sales_dashboard: {
         Args: {
           p_cost_month: string
