@@ -43,12 +43,14 @@ import {
 } from "./queries";
 
 // Lazy: el wizard de Excel pesa ~80 KiB (SheetJS). Solo se carga cuando el
-// usuario abre crear/reemplazar.
+// usuario abre crear/reemplazar. Importamos el tipo del componente para
+// preservar los generics (ColKey) tras React.lazy.
+import type { ImportWizardDialog as ImportWizardDialogType } from "@/components/excel/ImportWizardDialog";
 const ImportWizardDialog = React.lazy(() =>
   import("@/components/excel/ImportWizardDialog").then((m) => ({
     default: m.ImportWizardDialog,
   })),
-);
+) as unknown as typeof ImportWizardDialogType;
 
 type ColKey = "referencia" | "descripcion" | "unidad_empaque" | "precio";
 
@@ -300,7 +302,7 @@ function ReplaceListDialog({
   userId,
   userName,
 }: {
-  list: PriceList;
+  list: PriceListRow;
   onClose: () => void;
   onDone: () => void;
   userId: string | null;
@@ -356,7 +358,7 @@ function ReplaceListDialog({
   );
 }
 
-function ItemsSheet({ list, onClose }: { list: PriceList | null; onClose: () => void }) {
+function ItemsSheet({ list, onClose }: { list: PriceListRow | null; onClose: () => void }) {
   const [search, setSearch] = React.useState("");
   React.useEffect(() => {
     if (list) setSearch("");
@@ -392,7 +394,7 @@ function ItemsSheet({ list, onClose }: { list: PriceList | null; onClose: () => 
           </div>
         </div>
         <div className="mt-4 max-h-[calc(100vh-200px)] overflow-y-auto px-4 pb-6">
-          {loading ? (
+          {isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
