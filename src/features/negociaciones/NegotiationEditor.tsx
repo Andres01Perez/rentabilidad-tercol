@@ -53,8 +53,6 @@ type EditorItem = {
   source_price_list_id: string | null;
 };
 
-type PriceListOption = { id: string; name: string };
-
 function makeUid() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
