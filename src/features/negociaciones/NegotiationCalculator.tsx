@@ -547,7 +547,7 @@ export function NegotiationCalculator({
       )}
 
       {/* Search */}
-      <div className="glass rounded-2xl border border-border/60 p-4">
+      <div className="glass relative z-40 rounded-2xl border border-border/60 p-4">
         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Añadir referencia
         </label>
@@ -564,7 +564,7 @@ export function NegotiationCalculator({
             className="pl-9"
           />
           {searchOpen && query.trim().length >= 2 && (
-            <div className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-popover shadow-lg">
               <div className="flex items-center justify-between border-b border-border/60 px-2 py-1">
                 <span className="text-[11px] text-muted-foreground">
                   {searching ? "Buscando…" : `${results.length} resultado(s)`}
@@ -610,7 +610,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Items table */}
-      <div className="glass rounded-2xl border border-border/60 p-1">
+      <div className="glass relative z-0 rounded-2xl border border-border/60 p-1">
         {itemsLoading ? (
           <div className="flex h-32 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
