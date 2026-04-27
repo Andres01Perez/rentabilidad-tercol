@@ -482,7 +482,7 @@ export function NegotiationCalculator({
               <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
             </div>
           )}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
             icon={Wallet}
             label="Ventas netas"
