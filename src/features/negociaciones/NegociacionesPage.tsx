@@ -1,33 +1,16 @@
 import * as React from "react";
-import { Briefcase, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { Briefcase, Plus, Loader2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { formatCurrency } from "@/lib/period";
-import { cn } from "@/lib/utils";
-import { NegotiationEditor } from "./NegotiationEditor";
-import { NEGOTIATIONS_KEY, negotiationsQueryOptions } from "./queries";
+  NEGOTIATIONS_KEY,
+  negotiationsQueryOptions,
+  negotiationItemsQueryOptions,
+} from "./queries";
+import { NegotiationsList } from "./NegotiationsList";
+import { NegotiationCalculator } from "./NegotiationCalculator";
 
 export type NegotiationRow = {
   id: string;
@@ -36,6 +19,8 @@ export type NegotiationRow = {
   total: number;
   items_count: number;
   source_price_list_id: string | null;
+  cost_months: string[];
+  min_margin_pct: number;
   created_by_name: string;
   updated_by_name: string | null;
   created_at: string;
@@ -45,41 +30,64 @@ export type NegotiationRow = {
 export function NegociacionesPage() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const { data: rows = [], isLoading: loading, isFetching } = useQuery(
-    negotiationsQueryOptions(),
-  );
-  const [editing, setEditing] = React.useState<NegotiationRow | null>(null);
-  const [creating, setCreating] = React.useState(false);
-  const [deleting, setDeleting] = React.useState<NegotiationRow | null>(null);
+  const { data: rows = [], isLoading: loading } = useQuery(negotiationsQueryOptions());
 
-  const refresh = React.useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
-    // Calculadora consume las negociaciones como fuente: invalidar su cache.
-    void queryClient.invalidateQueries({ queryKey: ["calc"] });
-  }, [queryClient]);
+  // Selección actual: id real, null = sin selección, "new" = borrador en memoria.
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  // Cuando es borrador local sin guardar:
+  const [isNew, setIsNew] = React.useState(false);
 
-  const handleDelete = async () => {
-    if (!deleting) return;
-    const { error } = await supabase.from("negotiations").delete().eq("id", deleting.id);
-    if (error) {
-      toast.error("No se pudo eliminar la negociación");
-      return;
+  // Auto-seleccionar la primera negociación al cargar.
+  React.useEffect(() => {
+    if (selectedId === null && !isNew && rows.length > 0) {
+      setSelectedId(rows[0].id);
     }
-    toast.success("Negociación eliminada");
-    setDeleting(null);
-    refresh();
+  }, [rows, selectedId, isNew]);
+
+  const selected = React.useMemo(
+    () => rows.find((r) => r.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
+
+  // Pre-cargar items de la negociación seleccionada (para que el editor los tenga al toque).
+  const { data: items, isFetching: itemsLoading } = useQuery(
+    negotiationItemsQueryOptions(isNew ? null : selectedId),
+  );
+
+  const handleNew = () => {
+    setIsNew(true);
+    setSelectedId(null);
+  };
+
+  const handleSelect = (id: string) => {
+    setIsNew(false);
+    setSelectedId(id);
+  };
+
+  const handleSaved = (id: string) => {
+    setIsNew(false);
+    setSelectedId(id);
+    void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
+  };
+
+  const handleDeleted = () => {
+    setSelectedId(null);
+    setIsNew(false);
+    void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-10 lg:px-10">
+    <div className="mx-auto max-w-[1700px] px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
         icon={Briefcase}
         eyebrow="Análisis"
         title="Negociaciones"
-        description="Crea cotizaciones combinando referencias del catálogo con cantidades y precios. Cada negociación queda guardada con autoría."
+        description="Cotiza en tiempo real: añade referencias y observa cómo cambia la rentabilidad. La meta mínima de margen es del 36%."
         actions={
           <Button
-            onClick={() => setCreating(true)}
+            onClick={handleNew}
             className="bg-gradient-brand text-white shadow-elegant"
           >
             <Plus className="mr-1 h-4 w-4" />
@@ -88,114 +96,51 @@ export function NegociacionesPage() {
         }
       />
 
-      <div
-        className={cn(
-          "mt-8 glass rounded-2xl p-1 transition-opacity",
-          isFetching && rows.length > 0 && "opacity-60",
-        )}
-      >
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Nombre</TableHead>
-              <TableHead className="text-right">Items</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Creada por</TableHead>
-              <TableHead>Última actualización</TableHead>
-              <TableHead>Actualizada por</TableHead>
-              <TableHead className="w-[1%] text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                  Aún no hay negociaciones. Crea la primera con el botón de arriba.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.items_count}</TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold">
-                    {formatCurrency(r.total)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{r.created_by_name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(r.updated_at).toLocaleString("es-CO", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {r.updated_by_name ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Editar"
-                        onClick={() => setEditing(r)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Eliminar"
-                        onClick={() => setDeleting(r)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {(creating || editing) && (
-        <NegotiationEditor
-          negotiation={editing}
-          userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
-          onSaved={() => {
-            setCreating(false);
-            setEditing(null);
-            refresh();
-          }}
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
+        <NegotiationsList
+          rows={rows}
+          loading={loading}
+          selectedId={isNew ? "__new__" : selectedId}
+          isNew={isNew}
+          onSelect={handleSelect}
+          onNew={handleNew}
         />
-      )}
 
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar negociación?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se eliminará "{deleting?.name}" junto con sus {deleting?.items_count} items. Esta
-              acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {isNew ? (
+          <NegotiationCalculator
+            key="new"
+            negotiation={null}
+            initialItems={[]}
+            itemsLoading={false}
+            userId={user?.id ?? null}
+            userName={user?.name ?? "Sistema"}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+            onCancel={() => setIsNew(false)}
+          />
+        ) : selected ? (
+          <NegotiationCalculator
+            key={selected.id}
+            negotiation={selected}
+            initialItems={items ?? []}
+            itemsLoading={itemsLoading}
+            userId={user?.id ?? null}
+            userName={user?.name ?? "Sistema"}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+          />
+        ) : (
+          <div className="glass flex h-[60vh] items-center justify-center rounded-2xl border border-border/60 text-sm text-muted-foreground">
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Cargando negociaciones…
+              </div>
+            ) : (
+              "Selecciona una negociación o crea una nueva."
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

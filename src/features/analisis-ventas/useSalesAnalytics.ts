@@ -82,7 +82,7 @@ export interface DashboardData {
 
 export interface UseSalesAnalyticsArgs {
   salesMonth: string;
-  costPeriodMonth: string;
+  costPeriodMonths: string[];
   opPeriodMonth: string;
   financialDiscountPct: number;
   filters: {
@@ -113,9 +113,9 @@ const EMPTY_DATA: DashboardData = {
   hasAnySales: false,
 };
 
-function toCostMonthDate(salesMonth: string): string {
-  // 'YYYY-MM-01' ya es el formato correcto.
-  return salesMonth;
+function normalizeCostMonths(months: string[]): string[] {
+  // Eliminamos duplicados y ordenamos para que la queryKey sea estable.
+  return Array.from(new Set(months)).sort();
 }
 
 // =====================================================================
@@ -153,16 +153,18 @@ const financialDiscountsQueryOptions = () => ({
 });
 
 const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
-  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
+  const { salesMonth, costPeriodMonths, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
   const vKey = filters.vendedores.join("|");
   const dKey = filters.dependencias.join("|");
   const tKey = filters.terceros.join("|");
+  const costMonthsNorm = normalizeCostMonths(costPeriodMonths);
+  const cKey = costMonthsNorm.join("|");
   return {
     queryKey: [
       "sales-analytics",
       "dashboard",
       salesMonth,
-      costPeriodMonth,
+      cKey,
       opPeriodMonth,
       financialDiscountPct,
       vKey,
@@ -173,8 +175,8 @@ const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
     queryFn: async (): Promise<DashboardData> => {
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
         p_sales_month: salesMonth,
-        p_cost_month: toCostMonthDate(costPeriodMonth),
-        p_op_month: toCostMonthDate(opPeriodMonth),
+        p_cost_months: costMonthsNorm,
+        p_op_month: opPeriodMonth,
         p_financial_pct: financialDiscountPct,
         p_vendedores: vKey ? vKey.split("|") : undefined,
         p_dependencias: dKey ? dKey.split("|") : undefined,
@@ -255,7 +257,7 @@ export interface DetailRow {
 
 export interface UseSalesDetailArgs {
   salesMonth: string;
-  costPeriodMonth: string;
+  costPeriodMonths: string[];
   financialDiscountPct: number;
   filters: { vendedores: string[]; dependencias: string[]; terceros: string[] };
   search: string;
@@ -268,13 +270,15 @@ export interface UseSalesDetailArgs {
 
 export function useSalesDetail(args: UseSalesDetailArgs) {
   const {
-    salesMonth, costPeriodMonth, financialDiscountPct,
+    salesMonth, costPeriodMonths, financialDiscountPct,
     filters, search, sortKey, sortDir,
     limit = 500, refreshKey, enabled = true,
   } = args;
   const vKey = filters.vendedores.join("|");
   const dKey = filters.dependencias.join("|");
   const tKey = filters.terceros.join("|");
+  const costMonthsNorm = normalizeCostMonths(costPeriodMonths);
+  const cKey = costMonthsNorm.join("|");
 
   // Debounce ligero para búsqueda/filtros: la queryKey solo cambia cuando se
   // estabiliza el input.
@@ -289,7 +293,7 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
       "sales-analytics",
       "detail",
       salesMonth,
-      costPeriodMonth,
+      cKey,
       financialDiscountPct,
       vKey,
       dKey,
@@ -304,7 +308,7 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_sales_detail", {
         p_sales_month: salesMonth,
-        p_cost_month: costPeriodMonth,
+        p_cost_months: costMonthsNorm,
         p_financial_pct: financialDiscountPct,
         p_vendedores: vKey ? vKey.split("|") : undefined,
         p_dependencias: dKey ? dKey.split("|") : undefined,
@@ -364,7 +368,7 @@ export type GroupSortKey =
 
 export interface UseSalesByGroupArgs {
   salesMonth: string;
-  costPeriodMonth: string;
+  costPeriodMonths: string[];
   financialDiscountPct: number;
   filters: { vendedores: string[]; dependencias: string[]; terceros: string[] };
   search: string;
@@ -377,7 +381,7 @@ export interface UseSalesByGroupArgs {
 export function useSalesByGroup(args: UseSalesByGroupArgs) {
   const {
     salesMonth,
-    costPeriodMonth,
+    costPeriodMonths,
     financialDiscountPct,
     filters,
     search,
@@ -389,6 +393,8 @@ export function useSalesByGroup(args: UseSalesByGroupArgs) {
   const vKey = filters.vendedores.join("|");
   const dKey = filters.dependencias.join("|");
   const tKey = filters.terceros.join("|");
+  const costMonthsNorm = normalizeCostMonths(costPeriodMonths);
+  const cKey = costMonthsNorm.join("|");
 
   const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   React.useEffect(() => {
@@ -401,7 +407,7 @@ export function useSalesByGroup(args: UseSalesByGroupArgs) {
       "sales-analytics",
       "by-group",
       salesMonth,
-      costPeriodMonth,
+      cKey,
       financialDiscountPct,
       vKey,
       dKey,
@@ -415,7 +421,7 @@ export function useSalesByGroup(args: UseSalesByGroupArgs) {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_sales_by_group", {
         p_sales_month: salesMonth,
-        p_cost_month: costPeriodMonth,
+        p_cost_months: costMonthsNorm,
         p_financial_pct: financialDiscountPct,
         p_vendedores: vKey ? vKey.split("|") : undefined,
         p_dependencias: dKey ? dKey.split("|") : undefined,
