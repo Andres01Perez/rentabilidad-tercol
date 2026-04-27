@@ -655,6 +655,9 @@ export function AnalisisVentasPage() {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [activeTab, setActiveTab] = React.useState<"ref" | "grupo">("ref");
+  const [groupSortKey, setGroupSortKey] = React.useState<GroupSortKey>("ventas");
+  const [groupSortDir, setGroupSortDir] = React.useState<SortDir>("desc");
   // El input responde al instante; el RPC sólo se dispara con el valor diferido
   // (combinado con el debounce interno del hook).
   const deferredSearch = React.useDeferredValue(search);
@@ -687,7 +690,19 @@ export function AnalisisVentasPage() {
     sortDir,
     limit: 500,
     refreshKey,
-    enabled: analytics.hasAnySales,
+    enabled: analytics.hasAnySales && activeTab === "ref",
+  });
+
+  const grouped = useSalesByGroup({
+    salesMonth: applied.salesMonth,
+    costPeriodMonth: applied.costPeriod,
+    financialDiscountPct: applied.financialDiscountPct,
+    filters: appliedFilters,
+    search: deferredSearch,
+    sortKey: groupSortKey,
+    sortDir: groupSortDir,
+    refreshKey,
+    enabled: analytics.hasAnySales && activeTab === "grupo",
   });
 
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
@@ -745,6 +760,17 @@ export function AnalisisVentasPage() {
         return cur;
       }
       setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const toggleGroupSort = React.useCallback((key: GroupSortKey) => {
+    setGroupSortKey((cur) => {
+      if (cur === key) {
+        setGroupSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return cur;
+      }
+      setGroupSortDir("desc");
       return key;
     });
   }, []);
