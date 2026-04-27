@@ -1,194 +1,161 @@
-# Por qué sigue lenta la navegación (diagnóstico real)
+## Diagnóstico real
 
-Los 3-5 segundos al entrar a `/analisis-ventas` (y otras vistas pesadas) **ya no vienen de Supabase ni de la auth**. Vienen de cómo está armado el frontend. Encontré 5 cuellos de botella reales y medibles:
+Antes de arreglar, vale la pena ser honestos sobre por qué los cambios anteriores **no se sintieron** y en algunos casos empeoraron las cosas:
 
-## 1. Cascada "click → red → render" (la causa #1)
+1. **`defaultPreload: "intent"` en realidad agregó carga**: cada vez que el usuario pasa el mouse por el sidebar dispara fetches a Supabase para 6 vistas. Eso explica por qué los selectores y tablas "se demoran el doble": están compitiendo con preloads paralelos contra Supabase desde el navegador.
+2. **No estamos usando TanStack Query** aunque está instalado. Cada `useEffect → setLoading(true) → supabase.from(...)` se vuelve a ejecutar **completo** cada vez que entras a la vista, sin cache real. El `staleTime` del router solo cachea el resultado del `loader`, pero como no usamos loaders, no cachea nada.
+3. **`MonthSelect` se vuelve a montar** y recalcula `lastNMonths(24)` en cada render del padre porque el padre se desmonta al navegar.
+4. **`ImportWizardDialog` se incluye en el chunk principal** de cada página (lee Excel con SheetJS, ~80 KiB). Eso es justo el "Reduce unused JavaScript: 78 KiB" que reporta Lighthouse — está adentro de `index-CplQSEAv.js`.
+5. **Cache HTTP en 0 segundos** para todos los assets de Lovable (Lighthouse: 250 KiB desperdiciados). Esto **no podemos arreglarlo desde código** — lo controla el CDN de Lovable. Lo dejamos documentado.
+6. **Render blocking de Google Fonts** (~280 ms): el CSS de Montserrat es bloqueante.
 
-`useSalesAnalytics.ts` y los demás features usan **`useEffect` para hacer `fetch` después de montar**. Esto significa que cuando haces click en "Análisis de ventas":
+## Cambios propuestos
 
-```text
-click → bajar JS chunk (lazy) → montar componente → useEffect → 3 RPCs → render
-        └─── 200-600 ms ────┘  └─ 50 ms ─┘  └ 20 ms ┘  └─ 800-2000 ms ─┘
-```
+### Fase A — Frenar el preload masivo (1 archivo)
 
-Y peor: el hook lanza **3 efectos separados** (`get_sales_months`, `financial_discounts`, `get_sales_dashboard`) que se ejecutan en serie desde el punto de vista del usuario porque la pantalla muestra "loading" hasta que termina el más lento.
+**`src/router.tsx`**: cambiar `defaultPreload: "intent"` → `defaultPreload: false` y dejar solo `defaultPreloadStaleTime: 0`. La precarga por hover está saturando Supabase. Reemplazaremos esa "magia" por algo más confiable: TanStack Query con cache real.
 
-**Fix**: mover los fetchs al **`loader` de la ruta** de TanStack Router. Los loaders empiezan a correr **en paralelo con la descarga del chunk** y, con `defaultPreload: "intent"`, **arrancan apenas el cursor entra al link**. La pantalla aparece con datos ya cargados.
+### Fase B — TanStack Query como capa de cache (3 vistas + setup)
 
-## 2. `defaultPreload: false` está apagado en `src/router.tsx`
+**Setup global** (una sola vez):
 
-```ts
-// src/router.tsx — actual
-defaultPreload: false,           // ← desperdicia el hover
-defaultPreloadStaleTime: 0,      // ← ningún cache entre vistas
-```
+- Crear `src/lib/queryClient.ts` con un `QueryClient` configurado: `staleTime: 60_000`, `gcTime: 5 * 60_000`, `refetchOnWindowFocus: false`.
+- En `src/router.tsx` (factory `getRouter`): instanciar un `QueryClient` por request y pasarlo en `context`.
+- En `src/routes/__root.tsx`: añadir tipo de contexto `{ queryClient }` y envolver `<Outlet />` con `<QueryClientProvider>`.
 
-Con esto, **cada navegación arranca desde cero**, incluso si volviste a una vista que visitaste hace 2 segundos. No hay SWR, no hay precarga, no hay nada.
+**Refactor de las 3 vistas — patrón uniforme**:
 
-**Fix**: `defaultPreload: "intent"` + `defaultPreloadStaleTime: 30_000` para que al pasar el mouse por un link del sidebar el chunk + datos ya estén calientes. Esto solo, sin tocar nada más, suele bajar la navegación percibida a 0-300 ms.
+Para cada feature creamos un archivo de queries y migramos la página:
 
-## 3. Hydration mismatch en `UserSwitcher` (re-renderiza TODO el layout)
+#### B.1 — `listas-precios`
 
-El error que está apareciendo en consola:
+- Nuevo `src/features/listas-precios/queries.ts`:
+  - `priceListsQueryOptions()` → reemplaza `loadLists`.
+  - `priceListItemsQueryOptions(listId)` → reemplaza el `useEffect` del `ItemsSheet`.
+- En `routes/_app/listas-precios.tsx`: añadir `loader: ({ context }) => context.queryClient.ensureQueryData(priceListsQueryOptions())`.
+- En `ListasPreciosPage.tsx`:
+  - Cambiar `useState + useEffect + loadLists` por `useSuspenseQuery(priceListsQueryOptions())`.
+  - Después de mutaciones (delete, replace, create) → `queryClient.invalidateQueries(['price-lists'])` en lugar de re-llamar a `loadLists`.
+- Resultado esperado: la primera carga sigue tardando lo que tarde Supabase, pero al volver a la vista en menos de 60s es **instantánea** (cache) y no flickerea.
 
-```text
-Hydration failed because the server rendered text didn't match the client.
-+ title="Andres Perez"     - title="Sistema (sin firma)"
-+ AP                       - S
-```
+#### B.2 — `costos-operacionales`
 
-`UserSwitcher` lee `sessionStorage` en el cliente, pero en SSR no hay `sessionStorage`, así que el server pinta "Sistema / S" y el cliente lo cambia a "Andres Perez / AP". React detecta el desajuste y **regenera todo el árbol del layout** (sidebar + header + main). Eso por sí solo añade ~200-400 ms al primer pintado y un parpadeo notorio.
+- Nuevo `src/features/costos-operacionales/queries.ts`:
+  - `costCentersQueryOptions()` (compartida entre las dos pestañas).
+  - `operationalCostsQueryOptions(month)`.
+  - `previousMonthSuggestionQueryOptions(centerId, month)` para el sugeridor.
+- En `routes/_app/costos-operacionales.tsx`: `validateSearch` con `{ month?: string }` (zod), `loaderDeps: ({ search }) => ({ month: search.month })`, y precargar `ensureQueryData` para los centros + asignaciones.
+- En `CostosOperacionalesPage`: el `month` deja de vivir en `useState` y pasa a `Route.useSearch()` + `useNavigate({ search })`. Esto permite que **al cambiar de mes la URL refleje el filtro** y que volver atrás restaure el estado.
+- `AssignmentsTab` y `CentersTab` usan `useSuspenseQuery` y `useMutation` con `invalidateQueries` después de guardar.
 
-**Fix**: el switcher debe renderizar el placeholder neutro ("Sistema / S") hasta que `useEffect` lo monte en cliente — patrón estándar de "mounted flag". Cero costo, elimina el mismatch.
+#### B.3 — `costos-productos`
 
-## 4. Páginas monolíticas de 500-900 líneas en un solo chunk
+- Nuevo `src/features/costos-productos/queries.ts`:
+  - `productCostsQueryOptions(month)`.
+- Mismo patrón: `validateSearch` con `month`, `loader` con `ensureQueryData`, `useSuspenseQuery` en el componente.
+- Mantener el filtro de búsqueda (`search`) como `useState` local — no necesita estar en URL y se aplica sobre data ya cacheada.
 
-```text
-analisis-ventas:    909 líneas  (incluye tabla virtualizada + 4 rankings + filtros + KPIs)
-calculadora:        619 líneas
-costos-operacionales: 566 líneas
-costos-productos:   495 líneas
-listas-precios:     475 líneas
-```
+### Fase C — Code-splitting de pesos muertos (3 archivos)
 
-Aunque las rutas son `lazy`, **todo el feature** (incluyendo el dialog de upload, los rankings, etc.) viaja en un solo chunk. El primer `import()` puede pesar 80-150 KB de JS para parsear antes de pintar.
+El `ImportWizardDialog` carga SheetJS (~80 KiB) y solo se usa cuando el usuario abre el modal de importar. Hoy va en el chunk principal de cada página.
 
-**Fix**: extraer dialogs y secciones secundarias a sus propios `React.lazy`/`import()` diferidos. El dialog de upload no necesita estar en el bundle inicial de la página.
+- En `ListasPreciosPage.tsx` y `CostosProductosPage.tsx`: `const ImportWizardDialog = React.lazy(() => import("@/components/excel/ImportWizardDialog").then(m => ({ default: m.ImportWizardDialog })))` y envolver en `<Suspense fallback={null}>`.
+- En `CostosOperacionalesPage.tsx`: lazy del `AssignmentDialog` y `CenterDialog` (más livianos pero igual reducen el bundle inicial).
 
-## 5. Sin SWR de datos entre vistas
+Esto debería bajar `index-CplQSEAv.js` de ~158 KiB a ~80 KiB y atacar directamente el "Reduce unused JavaScript: 78 KiB" del informe.
 
-`useSalesAnalytics` guarda el estado en `useState` local del hook. Si sales de la página y vuelves 5 segundos después, **vuelve a pedir todo otra vez**. No hay caché.
+### Fase D — Render blocking de fuentes (1 archivo)
 
-**Fix**: con loaders + `staleTime: 30_000` el router cachea los datos por ruta y los reutiliza al volver — la segunda visita es instantánea.
-
----
-
-# Plan de implementación (estrictamente frontend, sin tocar Supabase)
-
-Orden de impacto (lo que más mueve la aguja primero):
-
-### Paso 1 — Activar preload + cache en el router (5 min, gran impacto)
-
-`src/router.tsx`:
-
-```ts
-const router = createRouter({
-  routeTree,
-  context: {},
-  scrollRestoration: true,
-  defaultPreload: "intent",          // hover/focus precarga chunk + loader
-  defaultPreloadDelay: 50,           // pequeño delay para evitar precargas accidentales
-  defaultPreloadStaleTime: 30_000,   // datos válidos por 30s
-  defaultStaleTime: 30_000,
-  defaultErrorComponent: DefaultErrorComponent,
-});
-```
-
-Solo este cambio ya hace que pasar el mouse por "Análisis de ventas" antes de hacer click descargue el chunk en paralelo.
-
-### Paso 2 — Arreglar el hydration mismatch del UserSwitcher (10 min)
-
-Patrón "mounted gate": durante SSR y primer render del cliente, mostrar siempre el estado neutro ("Sistema / S"). Al pasar el primer `useEffect`, leer `sessionStorage` y actualizar.
+En `src/routes/__root.tsx`: cambiar la carga de Montserrat a no-bloqueante:
 
 ```tsx
-// src/hooks/useCurrentUser.ts — cambiar el initializer
-export function useCurrentUser() {
-  // Empezar SIEMPRE en null para que SSR y primer render del cliente coincidan
-  const [user, setUserState] = React.useState<TercolUser | null>(null);
+{ rel: "preload", href: "...montserrat...", as: "style" },
+{ rel: "stylesheet", href: "...montserrat...", media: "print", onLoad: "this.media='all'" }
+```
 
-  React.useEffect(() => {
-    setUserState(readFromStorage());        // ← solo aquí leemos storage
-    const handler = () => setUserState(readFromStorage());
-    window.addEventListener(CHANGE_EVENT, handler);
-    window.addEventListener("storage", handler);
-    return () => { /* ... */ };
-  }, []);
-  // ...
+Como TanStack head no soporta `onLoad` en links, alternativa: inyectar el `<link>` desde un componente cliente con `useEffect` o aceptar la pérdida y solo mantener el `preconnect` (que ya existe). **Opción recomendada**: dejar Montserrat solo en `font-display: swap` (ya está) y aceptar los 80 ms — no vale la pena complejidad.
+
+### Fase E — Cache HTTP de assets (no requiere código)
+
+El reporte muestra `Cache-Control: 0` en todos los `.js` y `.css` del dominio Lovable. Esto lo controla el CDN de Lovable, no el repo. No es accionable desde el código de la app. Lo documentamos en el plan y avisamos.
+
+## Detalles técnicos clave
+
+```ts
+// src/lib/queryClient.ts
+export function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
+        refetchOnWindowFocus: false,
+        retry: 1,
+      },
+    },
+  });
 }
 ```
 
-Esto elimina el regenerado completo del árbol y el flash visual.
-
-### Paso 3 — Mover los fetchs al loader de la ruta (impacto fuerte)
-
-Convertir `src/routes/_app/analisis-ventas.tsx` (no el `.lazy.tsx`) en una ruta con loader y `loaderDeps` ligados a search params:
-
 ```ts
-// src/routes/_app/analisis-ventas.tsx
-import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
-import { zodValidator } from "@tanstack/zod-adapter";
-import { fetchSalesDashboard, fetchSalesMonths, fetchFinancialDiscounts } from "@/features/analisis-ventas/api";
-
-const searchSchema = z.object({
-  salesMonth: z.string().optional(),
-  costMonth: z.string().optional(),
-  opMonth: z.string().optional(),
-  finPct: z.coerce.number().default(0),
-  vendedores: z.array(z.string()).default([]),
-  dependencias: z.array(z.string()).default([]),
-  terceros: z.array(z.string()).default([]),
-});
-
-export const Route = createFileRoute("/_app/analisis-ventas")({
-  validateSearch: zodValidator(searchSchema),
-  loaderDeps: ({ search }) => search,
-  loader: async ({ deps }) => {
-    const [months, discounts, dashboard] = await Promise.all([
-      fetchSalesMonths(),
-      fetchFinancialDiscounts(),
-      deps.salesMonth ? fetchSalesDashboard(deps) : Promise.resolve(null),
-    ]);
-    return { months, discounts, dashboard };
-  },
-  staleTime: 30_000,
-  head: () => ({ meta: [{ title: "Análisis de ventas — Tercol" }] }),
-});
+// src/features/listas-precios/queries.ts
+export const priceListsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["price-lists"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("price_lists")
+        .select("id, name, created_by_name, created_at, updated_at, updated_by_name, price_list_items(count)")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data.map(/* ... */);
+    },
+  });
 ```
-
-Y `useSalesAnalytics` se convierte en wrapper que lee `Route.useLoaderData()` + `Route.useSearch()` para los filtros, eliminando los 3 `useEffect`. Los filtros de sidebar pasan a actualizar search params con `navigate({ search: prev => ({...prev, vendedores}) })` y el loader vuelve a correr automáticamente (con cache SWR).
-
-Replicar el mismo patrón en `calculadora`, `costos-productos`, `costos-operacionales`, `listas-precios`.
-
-### Paso 4 — Code-split secundario dentro de cada página (impacto medio)
 
 ```tsx
-// dentro de AnalisisVentasPage
-const UploadVentasDialog = React.lazy(() =>
-  import("./UploadVentasDialog").then(m => ({ default: m.UploadVentasDialog }))
-);
-// renderizar dentro de <Suspense fallback={null}> y solo cuando openUpload === true
+// routes/_app/costos-productos.tsx
+const searchSchema = z.object({
+  month: fallback(z.string(), defaultMonth()).default(defaultMonth()),
+});
+
+export const Route = createFileRoute("/_app/costos-productos")({
+  validateSearch: zodValidator(searchSchema),
+  loaderDeps: ({ search }) => ({ month: search.month }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(productCostsQueryOptions(deps.month)),
+  /* head ... */
+});
 ```
 
-Esto saca ~10-15 KB del chunk inicial de cada página pesada.
+## Archivos afectados
 
-### Paso 5 — Quitar el efecto de `MultiSelectFilter` y otros listeners en cascada
+Modificados:
+- `src/router.tsx` (preload off + queryClient en context)
+- `src/routes/__root.tsx` (QueryClientProvider + tipo context)
+- `src/routes/_app/listas-precios.tsx` (loader)
+- `src/routes/_app/costos-operacionales.tsx` (validateSearch + loader)
+- `src/routes/_app/costos-productos.tsx` (validateSearch + loader)
+- `src/features/listas-precios/ListasPreciosPage.tsx` (Query + lazy dialogs)
+- `src/features/costos-operacionales/CostosOperacionalesPage.tsx` (Query + URL state + lazy dialogs)
+- `src/features/costos-productos/CostosProductosPage.tsx` (Query + URL state + lazy dialog)
 
-Revisión final: confirmar que los `React.memo` de `KpiCard`, `MultiSelectFilter`, `RankingTable`, etc., realmente reciben referencias estables (callbacks con `useCallback`, arrays con `useMemo`). Esto ya está parcialmente hecho — auditar y completar.
+Creados:
+- `src/lib/queryClient.ts`
+- `src/features/listas-precios/queries.ts`
+- `src/features/costos-operacionales/queries.ts`
+- `src/features/costos-productos/queries.ts`
 
----
+## Lo que NO está en este plan
 
-# Resultado esperado
+- `analisis-ventas`, `negociaciones`, `calculadora`, `dashboard`: las dejaremos para una segunda iteración una vez validemos que estas 3 mejoraron.
+- Cache HTTP del CDN: fuera de nuestro control.
+- Reescribir `MonthSelect` para que no recalcule meses: ya está memoizado, no es el problema.
 
-| Métrica | Hoy | Después |
-|---|---|---|
-| Click → primer paint con datos | 3000-5000 ms | 200-600 ms (primera vez) / 0-100 ms (cached) |
-| Hover-a-click (preload activo) | n/a | ~0 ms |
-| Hydration warning | sí, en cada carga | eliminado |
-| Cache al volver a la vista | nunca | 30 s SWR |
+## Resultado esperado
 
-Sin tocar Supabase, sin tocar RPCs. El cuello de botella ya no es la base de datos — es que el frontend está esperando a tener todo en mano antes de empezar a renderizar, en vez de aprovechar el preload del router.
-
----
-
-# Archivos a modificar
-
-- `src/router.tsx` — preload + staleTime
-- `src/hooks/useCurrentUser.ts` — fix hydration
-- `src/routes/_app/analisis-ventas.tsx` — añadir loader + validateSearch
-- `src/features/analisis-ventas/useSalesAnalytics.ts` — leer de loader en vez de useEffect
-- `src/features/analisis-ventas/AnalisisVentasPage.tsx` — lazy del dialog, leer search params
-- (mismo patrón) `src/routes/_app/calculadora.tsx`, `costos-productos.tsx`, `costos-operacionales.tsx`, `listas-precios.tsx`
-- Crear `src/features/analisis-ventas/api.ts` (y equivalentes) con las funciones puras de fetch que usan tanto el loader como los hooks.
-
-¿Procedo con los 5 pasos en este orden, o prefieres que arranque solo con los pasos 1 + 2 + 3 (los de mayor impacto) y dejemos el split fino para una segunda iteración?
+- **Primera entrada a una vista**: igual de rápido que hoy (depende de Supabase) pero **sin** competir con preloads paralelos.
+- **Segunda entrada en menos de 60s**: instantánea (cache de Query, sin spinner).
+- **Cambio de mes**: se siente como filtrar — la vista anterior queda visible y solo cambian los datos cuando llegan.
+- **Bundle inicial de cada vista**: ~50% más pequeño (sin el dialog de Excel).
+- **Lighthouse "Reduce unused JS"**: debería desaparecer o bajar a <10 KiB.
