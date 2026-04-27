@@ -465,7 +465,7 @@ export function NegotiationCalculator({
       {/* KPIs en vivo */}
       <div
         className={cn(
-          "glass relative overflow-hidden rounded-2xl border p-4 transition-colors",
+          "glass sticky top-2 z-30 relative overflow-hidden rounded-2xl border p-4 backdrop-blur-xl transition-colors",
           belowMin
             ? "border-rose-400/60 bg-rose-50/40 dark:bg-rose-500/5"
             : okMin
