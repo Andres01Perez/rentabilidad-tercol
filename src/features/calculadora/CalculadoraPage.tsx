@@ -49,7 +49,7 @@ function pickDefaultMonth(available: string[], preferred: string) {
   return available[0] ?? "";
 }
 
-function KpiCard({
+const KpiCard = React.memo(function KpiCard({
   icon: Icon,
   label,
   value,
@@ -85,7 +85,7 @@ function KpiCard({
       {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
-}
+});
 
 interface CalcResult {
   rows: RentabilidadRow[];
