@@ -1,8 +1,7 @@
 import * as React from "react";
 import { Package, Upload, Loader2, Search, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { useNavigate, getRouteApi } from "@tanstack/react-router";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -29,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import type { WizardField, ImportWizardDialog as ImportWizardDialogType } from "@/components/excel/ImportWizardDialog";
 import { chunkedInsert } from "@/lib/excel";
-import { formatMonth, formatNumber } from "@/lib/period";
+import { currentMonthDate, formatMonth, formatNumber, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import {
   productCostsKey,
@@ -43,8 +42,6 @@ const ImportWizardDialog = React.lazy(() =>
     default: m.ImportWizardDialog,
   })),
 ) as unknown as typeof ImportWizardDialogType;
-
-const routeApi = getRouteApi("/_app/costos-productos");
 
 type ProductCost = ProductCostRow;
 
@@ -137,19 +134,9 @@ const SECTIONS: Section[] = [
 
 export function CostosProductosPage() {
   const { user } = useCurrentUser();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { month } = routeApi.useSearch();
-  const setMonth = React.useCallback(
-    (m: string) => {
-      void navigate({
-        to: "/costos-productos",
-        search: (prev: Record<string, unknown>) => ({ ...prev, month: m }),
-      });
-    },
-    [navigate],
-  );
-  const { data: rows, isFetching } = useSuspenseQuery(productCostsQueryOptions(month));
+  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
+  const { data: rows = [], isFetching } = useQuery(productCostsQueryOptions(month));
   const [search, setSearch] = React.useState("");
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [expanded, setExpanded] = React.useState<{ cu: boolean; ct: boolean }>({
