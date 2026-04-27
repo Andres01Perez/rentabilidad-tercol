@@ -1,15 +1,8 @@
 import * as React from "react";
 import { ChevronDown, ChevronUp, ChevronsUpDown, Search, X, Download } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import type { RentabilidadRow } from "./useCalculadora";
@@ -112,32 +105,54 @@ function matchText(value: string | null | undefined, q: string): boolean {
   return (value ?? "").toLowerCase().includes(q.trim().toLowerCase());
 }
 
-function SortableHead({
+// ----- Definición de columnas (header y filas comparten esta config) -----
+const COLS: Array<{ key: SortKey; label: string; width: number; align: "left" | "right"; numeric: boolean }> = [
+  { key: "referencia",     label: "Ref",         width: 120, align: "left",  numeric: false },
+  { key: "descripcion",    label: "Descripción", width: 240, align: "left",  numeric: false },
+  { key: "cantidad",       label: "Cant",        width: 80,  align: "right", numeric: true  },
+  { key: "precio",         label: "Precio",      width: 110, align: "right", numeric: true  },
+  { key: "descuentoPct",   label: "Desc %",      width: 90,  align: "right", numeric: true  },
+  { key: "precioNeto",     label: "Precio neto", width: 120, align: "right", numeric: true  },
+  { key: "ctuProm",        label: "CTU prom",    width: 110, align: "right", numeric: true  },
+  { key: "margenUnit",     label: "Margen U",    width: 110, align: "right", numeric: true  },
+  { key: "margenPct",      label: "Margen %",    width: 100, align: "right", numeric: true  },
+  { key: "margenNetoUnit", label: "M. neto U",   width: 110, align: "right", numeric: true  },
+  { key: "margenNetoPct",  label: "M. neto %",   width: 100, align: "right", numeric: true  },
+];
+const TOTAL_WIDTH = COLS.reduce((s, c) => s + c.width, 0);
+
+// ----- Cabecera ordenable (memo) -----
+const SortableHead = React.memo(function SortableHead({
   label,
   sortKey,
   current,
   dir,
   onClick,
-  align = "left",
-  className,
+  align,
+  width,
 }: {
   label: string;
   sortKey: SortKey;
   current: SortKey;
   dir: SortDir;
   onClick: (k: SortKey) => void;
-  align?: "left" | "right";
-  className?: string;
+  align: "left" | "right";
+  width: number;
 }) {
   const active = current === sortKey;
   return (
-    <TableHead className={cn(align === "right" && "text-right", "p-0", className)}>
+    <div
+      className={cn(
+        "flex h-10 items-center px-2 text-xs font-medium border-b border-border/40",
+        align === "right" ? "justify-end" : "justify-start",
+      )}
+      style={{ width, flexShrink: 0 }}
+    >
       <button
         type="button"
         onClick={() => onClick(sortKey)}
         className={cn(
-          "flex h-10 w-full items-center gap-1 px-2 text-xs font-medium transition-colors hover:text-foreground",
-          align === "right" ? "justify-end" : "justify-start",
+          "flex items-center gap-1 transition-colors hover:text-foreground",
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
@@ -148,32 +163,135 @@ function SortableHead({
           <ChevronsUpDown className="h-3 w-3 opacity-40" />
         )}
       </button>
-    </TableHead>
+    </div>
   );
-}
+});
 
-function FilterCell({
+// ----- Celda de filtro (memo + onChange estable por columna) -----
+const FilterCell = React.memo(function FilterCell({
+  colKey,
   value,
+  numeric,
+  width,
   onChange,
-  numeric = false,
-  placeholder,
 }: {
+  colKey: SortKey;
   value: string;
-  onChange: (v: string) => void;
-  numeric?: boolean;
-  placeholder?: string;
+  numeric: boolean;
+  width: number;
+  onChange: (key: SortKey, v: string) => void;
 }) {
+  const handleChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => onChange(colKey, e.target.value),
+    [colKey, onChange],
+  );
   return (
-    <TableHead className="p-1">
+    <div className="p-1 border-b border-border/40" style={{ width, flexShrink: 0 }}>
       <Input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? (numeric ? ">0" : "Filtrar…")}
+        onChange={handleChange}
+        placeholder={numeric ? ">0" : "Filtrar…"}
         className={cn("h-7 px-2 text-xs", numeric && "text-right tabular-nums")}
       />
-    </TableHead>
+    </div>
   );
-}
+});
+
+// ----- Fila virtualizada (memo) -----
+const VirtualRow = React.memo(function VirtualRow({ r }: { r: RentabilidadRow }) {
+  const tone =
+    r.margenNetoPct === null
+      ? ""
+      : r.margenNetoPct < 0
+        ? "bg-rose-50/40 dark:bg-rose-500/10"
+        : r.margenNetoPct < 5
+          ? "bg-amber-50/40 dark:bg-amber-500/10"
+          : "";
+  return (
+    <div className={cn("flex items-center border-b border-border/40 text-sm hover:bg-accent/30", tone)}>
+      <div
+        className="px-2 font-bold truncate"
+        style={{ width: COLS[0].width, flexShrink: 0, fontFamily: "Montserrat, sans-serif" }}
+      >
+        {r.referencia}
+      </div>
+      <div
+        className="px-2 truncate text-xs text-muted-foreground"
+        style={{ width: COLS[1].width, flexShrink: 0 }}
+        title={r.descripcion ?? undefined}
+      >
+        {r.descripcion ?? "—"}
+      </div>
+      <div className="px-2 text-right tabular-nums" style={{ width: COLS[2].width, flexShrink: 0 }}>
+        {formatNumber(r.cantidad)}
+      </div>
+      <div className="px-2 text-right tabular-nums" style={{ width: COLS[3].width, flexShrink: 0 }}>
+        {formatCurrency(r.precio)}
+      </div>
+      <div className="px-2 text-right tabular-nums" style={{ width: COLS[4].width, flexShrink: 0 }}>
+        {r.descuentoPct ? formatPercent(r.descuentoPct, 1) : "—"}
+      </div>
+      <div
+        className="px-2 text-right tabular-nums font-medium"
+        style={{ width: COLS[5].width, flexShrink: 0 }}
+      >
+        {formatCurrency(r.precioNeto)}
+      </div>
+      <div className="px-2 text-right tabular-nums" style={{ width: COLS[6].width, flexShrink: 0 }}>
+        {r.ctuProm === null ? (
+          <span
+            className={cn(
+              "inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+              r.costoCero
+                ? "border-rose-400/60 text-rose-600 dark:text-rose-300"
+                : "border-amber-400/60 text-amber-700 dark:text-amber-300",
+            )}
+          >
+            {r.costoCero ? "Costo 0" : "Sin costo"}
+          </span>
+        ) : (
+          formatCurrency(r.ctuProm)
+        )}
+      </div>
+      <div
+        className={cn(
+          "px-2 text-right tabular-nums",
+          r.margenUnit !== null && r.margenUnit < 0 && "text-rose-600",
+        )}
+        style={{ width: COLS[7].width, flexShrink: 0 }}
+      >
+        {r.margenUnit === null ? "—" : formatCurrency(r.margenUnit)}
+      </div>
+      <div
+        className={cn(
+          "px-2 text-right tabular-nums",
+          r.margenPct !== null && r.margenPct < 0 && "font-semibold text-rose-600",
+        )}
+        style={{ width: COLS[8].width, flexShrink: 0 }}
+      >
+        {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
+      </div>
+      <div
+        className={cn(
+          "px-2 text-right tabular-nums",
+          r.margenNetoUnit !== null && r.margenNetoUnit < 0 && "text-rose-600",
+        )}
+        style={{ width: COLS[9].width, flexShrink: 0 }}
+      >
+        {r.margenNetoUnit === null ? "—" : formatCurrency(r.margenNetoUnit)}
+      </div>
+      <div
+        className={cn(
+          "px-2 text-right tabular-nums",
+          r.margenNetoPct !== null && r.margenNetoPct < 0 && "font-semibold text-rose-600",
+        )}
+        style={{ width: COLS[10].width, flexShrink: 0 }}
+      >
+        {r.margenNetoPct === null ? "—" : formatPercent(r.margenNetoPct, 1)}
+      </div>
+    </div>
+  );
+});
 
 interface RentabilidadTableProps {
   rows: RentabilidadRow[];
@@ -186,29 +304,39 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [colFilters, setColFilters] = React.useState<ColFilters>(EMPTY_FILTERS);
 
-  const toggleSort = (k: SortKey) => {
-    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortKey(k);
-      setSortDir("asc");
-    }
-  };
+  // Inputs responden al instante; el filtrado/sort usa valores diferidos
+  // para no bloquear la UI con cada keystroke.
+  const deferredSearch = React.useDeferredValue(search);
+  const deferredFilters = React.useDeferredValue(colFilters);
 
-  const setF = (k: SortKey) => (v: string) =>
-    setColFilters((p) => ({ ...p, [k]: v }));
+  const toggleSort = React.useCallback((k: SortKey) => {
+    setSortKey((cur) => {
+      if (cur === k) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return cur;
+      }
+      setSortDir("asc");
+      return k;
+    });
+  }, []);
+
+  // Una sola función estable: FilterCell la usa pasando su propia key.
+  const handleFilterChange = React.useCallback((key: SortKey, v: string) => {
+    setColFilters((p) => (p[key] === v ? p : { ...p, [key]: v }));
+  }, []);
 
   const filteredRows = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const numF = {
-      cantidad: parseNumFilter(colFilters.cantidad),
-      precio: parseNumFilter(colFilters.precio),
-      descuentoPct: parseNumFilter(colFilters.descuentoPct),
-      precioNeto: parseNumFilter(colFilters.precioNeto),
-      ctuProm: parseNumFilter(colFilters.ctuProm),
-      margenUnit: parseNumFilter(colFilters.margenUnit),
-      margenPct: parseNumFilter(colFilters.margenPct),
-      margenNetoUnit: parseNumFilter(colFilters.margenNetoUnit),
-      margenNetoPct: parseNumFilter(colFilters.margenNetoPct),
+      cantidad: parseNumFilter(deferredFilters.cantidad),
+      precio: parseNumFilter(deferredFilters.precio),
+      descuentoPct: parseNumFilter(deferredFilters.descuentoPct),
+      precioNeto: parseNumFilter(deferredFilters.precioNeto),
+      ctuProm: parseNumFilter(deferredFilters.ctuProm),
+      margenUnit: parseNumFilter(deferredFilters.margenUnit),
+      margenPct: parseNumFilter(deferredFilters.margenPct),
+      margenNetoUnit: parseNumFilter(deferredFilters.margenNetoUnit),
+      margenNetoPct: parseNumFilter(deferredFilters.margenNetoPct),
     };
     const filtered = rows.filter((r) => {
       if (q) {
@@ -217,8 +345,8 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
           (r.descripcion ?? "").toLowerCase().includes(q);
         if (!hit) return false;
       }
-      if (!matchText(r.referencia, colFilters.referencia)) return false;
-      if (!matchText(r.descripcion, colFilters.descripcion)) return false;
+      if (!matchText(r.referencia, deferredFilters.referencia)) return false;
+      if (!matchText(r.descripcion, deferredFilters.descripcion)) return false;
       if (!matchNum(r.cantidad, numF.cantidad)) return false;
       if (!matchNum(r.precio, numF.precio)) return false;
       if (!matchNum(r.descuentoPct, numF.descuentoPct)) return false;
@@ -246,7 +374,7 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
         case "margenNetoPct": return r.margenNetoPct;
       }
     };
-    const sorted = [...filtered].sort((a, b) => {
+    filtered.sort((a, b) => {
       const av = getVal(a);
       const bv = getVal(b);
       const aNull = av === null || av === undefined || av === "";
@@ -257,16 +385,26 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv)) * dir;
     });
-    return sorted;
-  }, [rows, search, colFilters, sortKey, sortDir]);
+    return filtered;
+  }, [rows, deferredSearch, deferredFilters, sortKey, sortDir]);
+
+  const isStale = deferredSearch !== search || deferredFilters !== colFilters;
 
   const hasFilters =
     search.trim() !== "" || Object.values(colFilters).some((v) => v.trim() !== "");
 
-  const clear = () => {
+  const clear = React.useCallback(() => {
     setSearch("");
     setColFilters(EMPTY_FILTERS);
-  };
+  }, []);
+
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 36,
+    overscan: 12,
+  });
 
   return (
     <div className="glass rounded-2xl border border-border/60 p-5">
@@ -275,6 +413,7 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
           <h3 className="text-sm font-semibold">Rentabilidad por producto</h3>
           <p className="text-xs text-muted-foreground">
             Mostrando {formatNumber(filteredRows.length)} de {formatNumber(rows.length)} productos
+            {isStale && <span className="ml-2 text-[10px] italic">filtrando…</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -297,103 +436,80 @@ export function RentabilidadTable({ rows, onExport }: RentabilidadTableProps) {
           </Button>
         </div>
       </div>
-      <div className="mt-4 max-h-[calc(100vh-200px)] min-h-[500px] overflow-auto rounded-xl border border-border/40">
-        <Table>
-          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
-            <TableRow>
-              <SortableHead label="Ref" sortKey="referencia" current={sortKey} dir={sortDir} onClick={toggleSort} />
-              <SortableHead label="Descripción" sortKey="descripcion" current={sortKey} dir={sortDir} onClick={toggleSort} />
-              <SortableHead label="Cant" sortKey="cantidad" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="Precio" sortKey="precio" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="Desc %" sortKey="descuentoPct" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="Precio neto" sortKey="precioNeto" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="CTU prom" sortKey="ctuProm" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="Margen U" sortKey="margenUnit" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="Margen %" sortKey="margenPct" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="M. neto U" sortKey="margenNetoUnit" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortableHead label="M. neto %" sortKey="margenNetoPct" current={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-            </TableRow>
-            <TableRow className="hover:bg-transparent">
-              <FilterCell value={colFilters.referencia} onChange={setF("referencia")} />
-              <FilterCell value={colFilters.descripcion} onChange={setF("descripcion")} />
-              <FilterCell value={colFilters.cantidad} onChange={setF("cantidad")} numeric />
-              <FilterCell value={colFilters.precio} onChange={setF("precio")} numeric />
-              <FilterCell value={colFilters.descuentoPct} onChange={setF("descuentoPct")} numeric />
-              <FilterCell value={colFilters.precioNeto} onChange={setF("precioNeto")} numeric />
-              <FilterCell value={colFilters.ctuProm} onChange={setF("ctuProm")} numeric />
-              <FilterCell value={colFilters.margenUnit} onChange={setF("margenUnit")} numeric />
-              <FilterCell value={colFilters.margenPct} onChange={setF("margenPct")} numeric />
-              <FilterCell value={colFilters.margenNetoUnit} onChange={setF("margenNetoUnit")} numeric />
-              <FilterCell value={colFilters.margenNetoPct} onChange={setF("margenNetoPct")} numeric />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRows.map((r) => {
-              const neto = r.margenNetoPct;
-              const tone =
-                neto === null
-                  ? ""
-                  : neto < 0
-                    ? "bg-rose-50/40 dark:bg-rose-500/10"
-                    : neto < 5
-                      ? "bg-amber-50/40 dark:bg-amber-500/10"
-                      : "";
-              return (
-                <TableRow key={r.referencia} className={tone}>
-                  <TableCell className="font-bold" style={{ fontFamily: "Montserrat, sans-serif" }}>
-                    {r.referencia}
-                  </TableCell>
-                  <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
-                    {r.descripcion ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatNumber(r.cantidad)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrency(r.precio)}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.descuentoPct ? formatPercent(r.descuentoPct, 1) : "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {formatCurrency(r.precioNeto)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.ctuProm === null ? (
-                      <span
-                        className={cn(
-                          "inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-                          r.costoCero
-                            ? "border-rose-400/60 text-rose-600 dark:text-rose-300"
-                            : "border-amber-400/60 text-amber-700 dark:text-amber-300",
-                        )}
-                      >
-                        {r.costoCero ? "Costo 0" : "Sin costo"}
-                      </span>
-                    ) : (
-                      formatCurrency(r.ctuProm)
-                    )}
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", r.margenUnit !== null && r.margenUnit < 0 && "text-rose-600")}>
-                    {r.margenUnit === null ? "—" : formatCurrency(r.margenUnit)}
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", r.margenPct !== null && r.margenPct < 0 && "font-semibold text-rose-600")}>
-                    {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", r.margenNetoUnit !== null && r.margenNetoUnit < 0 && "text-rose-600")}>
-                    {r.margenNetoUnit === null ? "—" : formatCurrency(r.margenNetoUnit)}
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", r.margenNetoPct !== null && r.margenNetoPct < 0 && "font-semibold text-rose-600")}>
-                    {r.margenNetoPct === null ? "—" : formatPercent(r.margenNetoPct, 1)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {filteredRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
-                  Sin resultados con los filtros aplicados.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+
+      <div
+        ref={parentRef}
+        className={cn(
+          "mt-4 max-h-[calc(100vh-200px)] min-h-[500px] overflow-auto rounded-xl border border-border/40 transition-opacity",
+          isStale && "opacity-70",
+        )}
+      >
+        <div style={{ width: TOTAL_WIDTH, minWidth: "100%" }}>
+          {/* Cabecera + fila de filtros sticky */}
+          <div className="sticky top-0 z-10 bg-card/95 backdrop-blur" style={{ width: TOTAL_WIDTH }}>
+            <div className="flex" style={{ width: TOTAL_WIDTH }}>
+              {COLS.map((c) => (
+                <SortableHead
+                  key={c.key}
+                  label={c.label}
+                  sortKey={c.key}
+                  current={sortKey}
+                  dir={sortDir}
+                  onClick={toggleSort}
+                  align={c.align}
+                  width={c.width}
+                />
+              ))}
+            </div>
+            <div className="flex" style={{ width: TOTAL_WIDTH }}>
+              {COLS.map((c) => (
+                <FilterCell
+                  key={c.key}
+                  colKey={c.key}
+                  value={colFilters[c.key]}
+                  numeric={c.numeric}
+                  width={c.width}
+                  onChange={handleFilterChange}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Cuerpo virtualizado */}
+          {filteredRows.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Sin resultados con los filtros aplicados.
+            </div>
+          ) : (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                position: "relative",
+                width: TOTAL_WIDTH,
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vRow) => {
+                const r = filteredRows[vRow.index];
+                return (
+                  <div
+                    key={r.referencia}
+                    data-index={vRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: TOTAL_WIDTH,
+                      transform: `translateY(${vRow.start}px)`,
+                    }}
+                  >
+                    <VirtualRow r={r} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
