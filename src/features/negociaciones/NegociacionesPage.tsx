@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Briefcase, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -26,6 +27,7 @@ import {
 import { formatCurrency } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import { NegotiationEditor } from "./NegotiationEditor";
+import { NEGOTIATIONS_KEY, negotiationsQueryOptions } from "./queries";
 
 export type NegotiationRow = {
   id: string;
@@ -42,38 +44,17 @@ export type NegotiationRow = {
 
 export function NegociacionesPage() {
   const { user } = useCurrentUser();
-  const [rows, setRows] = React.useState<NegotiationRow[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const queryClient = useQueryClient();
+  const { data: rows = [], isLoading: loading, isFetching } = useQuery(
+    negotiationsQueryOptions(),
+  );
   const [editing, setEditing] = React.useState<NegotiationRow | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<NegotiationRow | null>(null);
 
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("negotiations")
-      .select(
-        "id, name, notes, total, items_count, source_price_list_id, created_by_name, updated_by_name, created_at, updated_at",
-      )
-      .order("updated_at", { ascending: false });
-    if (error) {
-      console.error(error);
-      toast.error("No se pudieron cargar las negociaciones");
-      setLoading(false);
-      return;
-    }
-    setRows(
-      (data ?? []).map((r) => ({
-        ...r,
-        total: Number(r.total),
-      })) as NegotiationRow[],
-    );
-    setLoading(false);
-  }, []);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+  const refresh = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
+  }, [queryClient]);
 
   const handleDelete = async () => {
     if (!deleting) return;
@@ -84,7 +65,7 @@ export function NegociacionesPage() {
     }
     toast.success("Negociación eliminada");
     setDeleting(null);
-    void load();
+    refresh();
   };
 
   return (
@@ -108,7 +89,7 @@ export function NegociacionesPage() {
       <div
         className={cn(
           "mt-8 glass rounded-2xl p-1 transition-opacity",
-          loading && rows.length > 0 && "opacity-60",
+          isFetching && rows.length > 0 && "opacity-60",
         )}
       >
         <Table>
@@ -193,7 +174,7 @@ export function NegociacionesPage() {
           onSaved={() => {
             setCreating(false);
             setEditing(null);
-            void load();
+            refresh();
           }}
         />
       )}
