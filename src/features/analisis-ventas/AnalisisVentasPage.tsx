@@ -37,7 +37,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSalesAnalytics, useSalesDetail, type RankingItem, type DetailRow } from "./useSalesAnalytics";
-import { UploadVentasDialog } from "./UploadVentasDialog";
+// El dialog de subida es secundario y pesado (xlsx parser, etc.):
+// lo cargamos perezosamente para que NO viaje en el chunk inicial de la página.
+const UploadVentasDialog = React.lazy(() =>
+  import("./UploadVentasDialog").then((m) => ({ default: m.UploadVentasDialog })),
+);
 import { currentMonthDate, formatCurrency, formatNumber, formatPercent, previousMonth } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
@@ -899,11 +903,17 @@ export function AnalisisVentasPage() {
         </>
       )}
 
-      <UploadVentasDialog
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        onUploaded={() => setRefreshKey((k) => k + 1)}
-      />
+      {/* Solo montamos el dialog cuando el usuario lo abre — esto evita
+          descargar el chunk de xlsx hasta que realmente se necesita. */}
+      {uploadOpen && (
+        <React.Suspense fallback={null}>
+          <UploadVentasDialog
+            open={uploadOpen}
+            onOpenChange={setUploadOpen}
+            onUploaded={() => setRefreshKey((k) => k + 1)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 }

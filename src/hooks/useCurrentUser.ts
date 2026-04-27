@@ -89,10 +89,17 @@ export function getCurrentUserForAudit(): { id: string | null; name: string } {
 }
 
 export function useCurrentUser() {
-  const [user, setUserState] = React.useState<TercolUser | null>(() => readFromStorage());
+  // IMPORTANTE: empezar SIEMPRE en `null` para que el HTML del SSR coincida
+  // con el primer render del cliente. Si leyéramos sessionStorage en el
+  // initializer, el server pintaría "Sistema" y el cliente "Andres Perez",
+  // disparando un hydration mismatch que regenera todo el árbol del layout
+  // (sidebar + header + main) y añade ~200-400 ms al primer paint.
+  const [user, setUserState] = React.useState<TercolUser | null>(null);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
+    // Leemos storage SOLO después de hidratar.
+    setUserState(readFromStorage());
     const handler = () => setUserState(readFromStorage());
     window.addEventListener(CHANGE_EVENT, handler);
     window.addEventListener("storage", handler);

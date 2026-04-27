@@ -59,9 +59,14 @@ export const getRouter = () => {
     routeTree,
     context: {},
     scrollRestoration: true,
-    defaultPreload: false,
-    defaultPreloadDelay: 0,
-    defaultPreloadStaleTime: 0,
+    // Precarga al hacer hover/focus sobre un <Link>: el chunk + loader empiezan
+    // antes del click, haciendo la navegación sentirse instantánea.
+    defaultPreload: "intent",
+    defaultPreloadDelay: 50,
+    // SWR: datos válidos por 30s — al volver a una vista visitada hace poco
+    // se renderiza al instante con datos cacheados y se revalida en background.
+    defaultPreloadStaleTime: 30_000,
+    defaultStaleTime: 30_000,
     defaultErrorComponent: DefaultErrorComponent,
   });
 
