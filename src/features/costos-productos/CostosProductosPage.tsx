@@ -160,6 +160,9 @@ export function CostosProductosPage() {
   const refresh = React.useCallback(
     (m: string) => {
       void queryClient.invalidateQueries({ queryKey: productCostsKey(m) });
+      // Calculadora consume estos costos: invalidamos su catálogo y cachés
+      // para que reflejen el nuevo mes inmediatamente.
+      void queryClient.invalidateQueries({ queryKey: ["calc"] });
     },
     [queryClient],
   );
