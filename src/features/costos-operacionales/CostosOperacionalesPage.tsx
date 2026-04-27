@@ -82,6 +82,8 @@ function AssignmentsTab() {
   );
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: operationalCostsKey(month) });
+    // Calculadora consume estos % operacionales: invalidamos su cache.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   }, [queryClient, month]);
   const [editing, setEditing] = React.useState<Assignment | null>(null);
   const [creating, setCreating] = React.useState(false);
