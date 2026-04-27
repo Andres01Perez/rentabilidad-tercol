@@ -1,36 +1,55 @@
-## Cambios en Negociaciones
+## Problema detectado
 
-Dos ajustes pequeños en `src/features/negociaciones/`.
+La razón por la que **nada se calcula** (ni en vivo ni al guardar las métricas derivadas) es un bug en la función SQL `get_negotiation_realtime` en Supabase. Devuelve error **400** en cada llamada:
 
-### 1. Vista lista → calculadora (sin sidebar permanente)
+```
+column r.margen_pct does not exist
+hint: Perhaps you meant to reference the column "r.margenPct"
+```
 
-Hoy la página muestra siempre el sidebar `NegotiationsList` (320px) + la calculadora a la derecha. Cambiamos a un flujo de dos vistas:
+La función arma un subquery con alias en camelCase (`margenPct`, `ctuProm`) pero al final hace `ORDER BY r.margen_pct DESC` (snake_case), un nombre que no existe. Como el RPC siempre falla, el hook `useNegotiationLive` nunca recibe filas → KPIs en 0, márgenes vacíos, sin sugerencias.
 
-- **Vista "lista"** (por defecto): ocupa todo el ancho. Muestra:
-  - Buscador y botón "Nueva negociación".
-  - Tarjetas/filas con nombre, autor, items, total y fecha de actualización.
-  - Botón "Editar" (o clic en toda la fila) por cada negociación.
-- **Vista "calculadora"**: ocupa todo el ancho. Se abre al:
-  - Hacer clic en una negociación de la lista, o
-  - Pulsar "Nueva negociación".
-  - Incluye un botón "← Volver a negociaciones" arriba que regresa a la lista.
+## Cambios a aplicar
 
-Estado en `NegociacionesPage.tsx`: un único `mode: "list" | "edit"` además del `selectedId`/`isNew` actuales. Al guardar/eliminar, regresamos a la lista (en vez de quedarnos en la calculadora) e invalidamos las queries como ya se hace.
+### 1. Migración SQL — corregir `get_negotiation_realtime`
 
-`NegotiationsList.tsx` se rediseña como vista principal a ancho completo (grid responsive de tarjetas en lugar de columna estrecha) y recibe un `onEdit(id)` además del actual `onSelect`.
+Reemplazar el `ORDER BY r.margen_pct DESC` por `ORDER BY r."margenPct" DESC` (camelCase entre comillas, que es como quedó aliasado en el subquery `r`). No se modifica ninguna otra lógica de la función.
 
-### 2. Quitar Margen Neto de la calculadora
+### 2. Sticky de la sección de KPIs en `NegotiationCalculator.tsx`
 
-En `NegotiationCalculator.tsx` (líneas 513–526) se eliminan los dos KPIs:
-- "Margen neto %"
-- "Margen neto $"
+Hacer que el bloque de tarjetas KPI (Ventas netas / Costo / Margen $ / Margen %) quede pegado al tope al hacer scroll, de modo que al añadir muchas referencias siempre se vean los totales.
 
-El grid de KPIs queda con 4 tarjetas: Ventas netas, Costo total, Margen bruto $, Margen bruto %. Se ajusta `grid-cols-…` a `md:grid-cols-4` (sin `xl:grid-cols-6`).
+- Añadir `sticky top-2 z-30` (o `top-4`) al contenedor del bloque KPI.
+- Mantener `backdrop-blur` y borde para que se lea bien sobre la tabla que pasa por debajo.
+- Asegurar que la tabla de items (`z-0`) y el dropdown del buscador (`z-50`) sigan respetando el orden visual: buscador encima del KPI sticky.
 
-No se toca `useNegotiationLive.ts` ni el RPC backend (los campos `margenNeto*` siguen existiendo pero no se renderizan), para no romper otras cosas y dejar la puerta abierta cuando se añada el selector operacional.
+### Detalle técnico
 
-### Archivos a modificar
+**SQL (migración):**
+```sql
+CREATE OR REPLACE FUNCTION public.get_negotiation_realtime(...)
+-- ... cuerpo igual ...
+-- al final del bloque de sugerencias:
+SELECT referencia, descripcion, precio, ctu_avg AS "ctuProm",
+       margen_pct AS "margenPct"
+FROM ranked
+WHERE margen_pct >= p_min_margin_pct
+ORDER BY "margenPct" DESC   -- antes: ORDER BY margen_pct DESC ❌
+LIMIT GREATEST(p_top_suggestions, 0)
+```
 
-- `src/features/negociaciones/NegociacionesPage.tsx` — añadir `mode`, condicional list/edit, botón volver.
-- `src/features/negociaciones/NegotiationsList.tsx` — rediseñar como vista a ancho completo con tarjetas y botón Editar.
-- `src/features/negociaciones/NegotiationCalculator.tsx` — quitar 2 KPIs de margen neto y ajustar grid.
+**JSX (KPIs sticky):**
+```tsx
+<div className={cn(
+  "glass sticky top-2 z-30 rounded-2xl border p-4 backdrop-blur-xl ...",
+  // estados belowMin / okMin / default
+)}>
+  {/* KPIs */}
+</div>
+```
+
+Con la función SQL corregida, el RPC devolverá 200 y el hook poblará automáticamente: CTU prom, Margen U, Margen %, Subtotales, KPIs totales y panel de sugerencias. No se requieren cambios adicionales en el frontend para los cálculos.
+
+## Archivos afectados
+- Nueva migración Supabase (corrección de `get_negotiation_realtime`)
+- `src/features/negociaciones/NegotiationCalculator.tsx` (sticky de KPIs)
