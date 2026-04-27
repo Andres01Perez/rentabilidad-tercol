@@ -283,6 +283,8 @@ export function NegotiationEditor({
           queryKey: negotiationItemsKey(negotiationId),
         });
       }
+      // Calculadora consume las negociaciones como fuente: invalidar su cache.
+      void queryClient.invalidateQueries({ queryKey: ["calc"] });
       onSaved();
     } catch (e) {
       console.error(e);
