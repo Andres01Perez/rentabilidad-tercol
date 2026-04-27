@@ -9,6 +9,7 @@ export const Route = createFileRoute("/_app/dashboard")({
       { name: "description", content: "Resumen ejecutivo de rentabilidad, ventas y costos en Tercol." },
     ],
   }),
+  component: DashboardPage,
 });
 
 function DashboardPage() {
