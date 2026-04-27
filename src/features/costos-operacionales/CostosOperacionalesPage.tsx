@@ -1,6 +1,8 @@
 import * as React from "react";
 import { Building2, Plus, Pencil, Loader2, Power } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate, getRouteApi } from "@tanstack/react-router";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -32,26 +34,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { currentMonthDate, formatMonth, previousMonth, formatPercent } from "@/lib/period";
+import { formatMonth, previousMonth, formatPercent } from "@/lib/period";
 import { cn } from "@/lib/utils";
+import {
+  COST_CENTERS_KEY,
+  costCentersQueryOptions,
+  operationalCostsKey,
+  operationalCostsQueryOptions,
+  type AssignmentRow,
+  type CostCenterRow,
+} from "./queries";
 
-type CostCenter = {
-  id: string;
-  name: string;
-  is_active: boolean;
-  created_by_name: string;
-  created_at: string;
-};
+const routeApi = getRouteApi("/_app/costos-operacionales");
 
-type Assignment = {
-  id: string;
-  cost_center_id: string;
-  cost_center_name: string;
-  percentage: number;
-  updated_at: string;
-  updated_by_name: string | null;
-  created_by_name: string;
-};
+type CostCenter = CostCenterRow;
+type Assignment = AssignmentRow;
 
 export function CostosOperacionalesPage() {
   return (
@@ -80,43 +77,27 @@ export function CostosOperacionalesPage() {
 
 function AssignmentsTab() {
   const { user } = useCurrentUser();
-  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
-  const [assignments, setAssignments] = React.useState<Assignment[]>([]);
-  const [centers, setCenters] = React.useState<CostCenter[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { month } = routeApi.useSearch();
+  const setMonth = React.useCallback(
+    (m: string) => {
+      void navigate({
+        to: "/costos-operacionales",
+        search: (prev: Record<string, unknown>) => ({ ...prev, month: m }),
+      });
+    },
+    [navigate],
+  );
+  const { data: centers } = useSuspenseQuery(costCentersQueryOptions());
+  const { data: assignments, isFetching: loading } = useSuspenseQuery(
+    operationalCostsQueryOptions(month),
+  );
+  const refresh = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: operationalCostsKey(month) });
+  }, [queryClient, month]);
   const [editing, setEditing] = React.useState<Assignment | null>(null);
   const [creating, setCreating] = React.useState(false);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    const [{ data: c }, { data: a }] = await Promise.all([
-      supabase.from("cost_centers").select("*").order("name"),
-      supabase
-        .from("operational_costs")
-        .select("id, cost_center_id, percentage, updated_at, updated_by_name, created_by_name, cost_centers(name)")
-        .eq("period_month", month),
-    ]);
-    setCenters((c ?? []) as CostCenter[]);
-    const mapped: Assignment[] = (a ?? []).map((r) => ({
-      id: r.id,
-      cost_center_id: r.cost_center_id,
-      cost_center_name:
-        (r.cost_centers as { name?: string } | null)?.name ??
-        (c ?? []).find((cc) => cc.id === r.cost_center_id)?.name ??
-        "—",
-      percentage: Number(r.percentage),
-      updated_at: r.updated_at,
-      updated_by_name: r.updated_by_name,
-      created_by_name: r.created_by_name,
-    }));
-    // Stale-while-revalidate: el estado anterior queda visible hasta el éxito.
-    setAssignments(mapped);
-    setLoading(false);
-  }, [month]);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
 
   const total = assignments.reduce((acc, a) => acc + a.percentage, 0);
   const availableCenters = centers.filter(
@@ -203,7 +184,7 @@ function AssignmentsTab() {
           onDone={() => {
             setCreating(false);
             setEditing(null);
-            void load();
+                refresh();
           }}
         />
       )}
@@ -366,26 +347,15 @@ function AssignmentDialog({
 
 function CentersTab() {
   const { user } = useCurrentUser();
-  const [centers, setCenters] = React.useState<CostCenter[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const queryClient = useQueryClient();
+  const { data: centers, isFetching: loading } = useSuspenseQuery(
+    costCentersQueryOptions(),
+  );
+  const refresh = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: COST_CENTERS_KEY });
+  }, [queryClient]);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<CostCenter | null>(null);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("cost_centers")
-      .select("*")
-      .order("is_active", { ascending: false })
-      .order("name");
-    if (error) toast.error("Error cargando centros");
-    setCenters((data ?? []) as CostCenter[]);
-    setLoading(false);
-  }, []);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
 
   const toggleActive = async (c: CostCenter) => {
     const { error } = await supabase
@@ -397,7 +367,7 @@ function CentersTab() {
       return;
     }
     toast.success(c.is_active ? "Desactivado" : "Activado");
-    void load();
+    refresh();
   };
 
   return (
@@ -483,7 +453,7 @@ function CentersTab() {
           onDone={() => {
             setCreating(false);
             setEditing(null);
-            void load();
+            refresh();
           }}
         />
       )}
