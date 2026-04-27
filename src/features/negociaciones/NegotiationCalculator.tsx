@@ -547,7 +547,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-40 rounded-2xl border border-border/60 p-4">
+      <div className="glass relative z-0 rounded-2xl border border-border/60 p-4">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Añadir referencia
