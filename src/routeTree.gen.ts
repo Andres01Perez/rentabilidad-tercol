@@ -34,16 +34,12 @@ const AppNegociacionesRoute = AppNegociacionesRouteImport.update({
   id: '/negociaciones',
   path: '/negociaciones',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/negociaciones.lazy').then((d) => d.Route),
-)
+} as any)
 const AppListasPreciosRoute = AppListasPreciosRouteImport.update({
   id: '/listas-precios',
   path: '/listas-precios',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/listas-precios.lazy').then((d) => d.Route),
-)
+} as any)
 const AppHistorialRoute = AppHistorialRouteImport.update({
   id: '/historial',
   path: '/historial',
@@ -53,23 +49,17 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/dashboard.lazy').then((d) => d.Route),
-)
+} as any)
 const AppCostosProductosRoute = AppCostosProductosRouteImport.update({
   id: '/costos-productos',
   path: '/costos-productos',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/costos-productos.lazy').then((d) => d.Route),
-)
+} as any)
 const AppCostosOperacionalesRoute = AppCostosOperacionalesRouteImport.update({
   id: '/costos-operacionales',
   path: '/costos-operacionales',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/costos-operacionales.lazy').then((d) => d.Route),
-)
+} as any)
 const AppConfiguracionesRoute = AppConfiguracionesRouteImport.update({
   id: '/configuraciones',
   path: '/configuraciones',
@@ -79,16 +69,12 @@ const AppCalculadoraRoute = AppCalculadoraRouteImport.update({
   id: '/calculadora',
   path: '/calculadora',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/calculadora.lazy').then((d) => d.Route),
-)
+} as any)
 const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
   id: '/analisis-ventas',
   path: '/analisis-ventas',
   getParentRoute: () => AppRoute,
-} as any).lazy(() =>
-  import('./routes/_app/analisis-ventas.lazy').then((d) => d.Route),
-)
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -288,3 +274,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
