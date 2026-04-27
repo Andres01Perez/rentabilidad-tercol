@@ -816,6 +816,13 @@ export function NegotiationCalculator({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ImportItemsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        existingRefs={items.map((i) => i.referencia)}
+        onImport={(rows) => void handleImport(rows)}
+      />
     </section>
   );
 }
