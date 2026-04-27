@@ -625,14 +625,13 @@ export function NegotiationCalculator({
               <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[110px]">Ref</TableHead>
-                  <TableHead className="min-w-[140px]">Descripción</TableHead>
-                  <TableHead className="w-[90px] text-right">Cant.</TableHead>
-                  <TableHead className="w-[120px] text-right">PUV</TableHead>
-                  <TableHead className="w-[80px] text-right">Desc %</TableHead>
-                  <TableHead className="w-[110px] text-right">CTU prom</TableHead>
-                  <TableHead className="w-[110px] text-right">Margen U</TableHead>
-                  <TableHead className="w-[90px] text-right">Margen %</TableHead>
-                  <TableHead className="w-[120px] text-right">Subtotal</TableHead>
+                  <TableHead className="w-[110px] text-right">Cant.</TableHead>
+                  <TableHead className="w-[150px] text-right">PUV</TableHead>
+                  <TableHead className="w-[100px] text-right">Desc %</TableHead>
+                  <TableHead className="w-[120px] text-right">CTU prom</TableHead>
+                  <TableHead className="w-[120px] text-right">Margen U</TableHead>
+                  <TableHead className="w-[100px] text-right">Margen %</TableHead>
+                  <TableHead className="w-[140px] text-right">Subtotal</TableHead>
                   <TableHead className="w-[1%]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -645,9 +644,6 @@ export function NegotiationCalculator({
                   return (
                     <TableRow key={it.uid}>
                       <TableCell className="text-sm font-bold">{it.referencia}</TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                        {it.descripcion ?? "—"}
-                      </TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -656,7 +652,7 @@ export function NegotiationCalculator({
                           value={it.cantidad}
                           onChange={(e) => updateItem(it.uid, { cantidad: e.target.value })}
                           className={cn(
-                            "h-8 text-right tabular-nums",
+                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
                             err?.qty && "border-destructive",
                           )}
                         />
@@ -671,7 +667,7 @@ export function NegotiationCalculator({
                             updateItem(it.uid, { precio_unitario: e.target.value })
                           }
                           className={cn(
-                            "h-8 text-right tabular-nums",
+                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
                             err?.price && "border-destructive",
                           )}
                         />
@@ -687,7 +683,7 @@ export function NegotiationCalculator({
                             updateItem(it.uid, { descuento_pct: e.target.value })
                           }
                           className={cn(
-                            "h-8 text-right tabular-nums",
+                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
                             err?.disc && "border-destructive",
                           )}
                         />
