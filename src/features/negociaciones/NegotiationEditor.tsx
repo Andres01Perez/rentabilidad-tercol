@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Loader2, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,12 @@ import { chunkedInsert } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 import { useReferenceSearch } from "./useReferenceSearch";
 import type { NegotiationRow } from "./NegociacionesPage";
+import {
+  NEGOTIATIONS_KEY,
+  negotiationItemsKey,
+  negotiationItemsQueryOptions,
+  priceListsLightQueryOptions,
+} from "./queries";
 
 const NONE_LIST_VALUE = "__none__";
 
@@ -78,65 +85,42 @@ export function NegotiationEditor({
     negotiation?.source_price_list_id ?? null,
   );
   const [items, setItems] = React.useState<EditorItem[]>([]);
-  const [priceLists, setPriceLists] = React.useState<PriceListOption[]>([]);
-  const [loadingItems, setLoadingItems] = React.useState(isEdit);
   const [saving, setSaving] = React.useState(false);
+  const queryClient = useQueryClient();
+
+  // Listas de precios (cacheadas 5 min, compartidas con otros componentes).
+  const { data: priceLists = [] } = useQuery(priceListsLightQueryOptions());
+
+  // Items de la negociación que estamos editando (cache instantáneo si se
+  // reabre la misma).
+  const negotiationId = negotiation?.id ?? null;
+  const { data: itemsData, isLoading: loadingItems } = useQuery(
+    negotiationItemsQueryOptions(negotiationId),
+  );
 
   // Search state
   const [query, setQuery] = React.useState("");
   const [searchOpen, setSearchOpen] = React.useState(false);
   const { results, loading: searching } = useReferenceSearch(query);
 
-  // Cargar listas de precios
+  // Hidratamos `items` (estado editable) cuando llegan los datos desde React
+  // Query. Solo lo hacemos al cambiar de negociación; las ediciones siguientes
+  // son locales hasta que se guarde.
   React.useEffect(() => {
-    void supabase
-      .from("price_lists")
-      .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => {
-        setPriceLists((data as PriceListOption[]) ?? []);
-      });
-  }, []);
-
-  // Cargar items si edita
-  React.useEffect(() => {
-    if (!negotiation) return;
-    setLoadingItems(true);
-    void supabase
-      .from("negotiation_items")
-      .select(
-        "id, referencia, descripcion, cantidad, precio_unitario, descuento_pct, source_price_list_id",
-      )
-      .eq("negotiation_id", negotiation.id)
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
-        if (error) {
-          toast.error("Error cargando items");
-          setLoadingItems(false);
-          return;
-        }
-        setItems(
-          (data ?? []).map((r: {
-            id: string;
-            referencia: string;
-            descripcion: string | null;
-            cantidad: number;
-            precio_unitario: number;
-            descuento_pct: number | null;
-            source_price_list_id: string | null;
-          }) => ({
-            uid: r.id,
-            referencia: r.referencia,
-            descripcion: r.descripcion,
-            cantidad: String(r.cantidad),
-            precio_unitario: String(r.precio_unitario),
-            descuento_pct: String(r.descuento_pct ?? 0),
-            source_price_list_id: r.source_price_list_id,
-          })),
-        );
-        setLoadingItems(false);
-      });
-  }, [negotiation]);
+    if (!negotiationId || !itemsData) return;
+    setItems(
+      itemsData.map((r) => ({
+        uid: r.id,
+        referencia: r.referencia,
+        descripcion: r.descripcion,
+        cantidad: String(r.cantidad),
+        precio_unitario: String(r.precio_unitario),
+        descuento_pct: String(r.descuento_pct ?? 0),
+        source_price_list_id: r.source_price_list_id,
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [negotiationId, itemsData]);
 
   const lookupPriceFromList = async (
     referencia: string,
@@ -294,6 +278,13 @@ export function NegotiationEditor({
       });
 
       toast.success(isEdit ? "Negociación actualizada" : "Negociación creada");
+      // Invalida la lista y, si es edición, los items recién guardados.
+      void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
+      if (negotiationId) {
+        void queryClient.invalidateQueries({
+          queryKey: negotiationItemsKey(negotiationId),
+        });
+      }
       onSaved();
     } catch (e) {
       console.error(e);
