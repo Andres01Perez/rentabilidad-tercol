@@ -305,13 +305,10 @@ const RankingCard = React.memo(function RankingCard({
 });
 
 type SortKey =
-  | "sale_date"
   | "vendedor"
-  | "dependencia"
   | "tercero"
   | "referencia"
   | "grupo"
-  | "cantidad"
   | "precio_unitario"
   | "ctu"
   | "margenU"
@@ -365,17 +362,14 @@ const SortableHead = React.memo(function SortableHead({
 
 // Definición de columnas (anchos px) — usada por header y por cada fila virtual.
 const COLS: Array<{ key: SortKey; label: string; width: number; align: "left" | "right" }> = [
-  { key: "sale_date", label: "Fecha", width: 110, align: "left" },
-  { key: "vendedor", label: "Vendedor", width: 150, align: "left" },
-  { key: "dependencia", label: "Dependencia", width: 150, align: "left" },
-  { key: "tercero", label: "Tercero", width: 220, align: "left" },
-  { key: "referencia", label: "Ref", width: 140, align: "left" },
-  { key: "grupo", label: "Grupo", width: 130, align: "left" },
-  { key: "cantidad", label: "Cant", width: 90, align: "right" },
-  { key: "precio_unitario", label: "PUV", width: 110, align: "right" },
-  { key: "ctu", label: "CTU", width: 110, align: "right" },
-  { key: "margenU", label: "Margen U.", width: 120, align: "right" },
-  { key: "margenPct", label: "Margen %", width: 100, align: "right" },
+  { key: "vendedor", label: "Vendedor", width: 170, align: "left" },
+  { key: "tercero", label: "Tercero", width: 240, align: "left" },
+  { key: "grupo", label: "Grupo", width: 150, align: "left" },
+  { key: "referencia", label: "Ref", width: 150, align: "left" },
+  { key: "precio_unitario", label: "PUV", width: 120, align: "right" },
+  { key: "ctu", label: "CTU", width: 120, align: "right" },
+  { key: "margenU", label: "Margen U.", width: 130, align: "right" },
+  { key: "margenPct", label: "Margen %", width: 110, align: "right" },
 ];
 
 const TOTAL_WIDTH = COLS.reduce((sum, c) => sum + c.width, 0);
@@ -385,21 +379,18 @@ const VirtualRow = React.memo(function VirtualRow({ row }: { row: DetailRow }) {
   const isNegPct = (row.margenPct ?? 0) < 0;
   return (
     <div className="flex items-center border-b border-border/40 text-sm hover:bg-accent/30">
-      <div className="px-3 whitespace-nowrap" style={{ width: COLS[0].width, flexShrink: 0 }}>{row.sale_date}</div>
-      <div className="px-3 truncate" style={{ width: COLS[1].width, flexShrink: 0 }}>{row.vendedor ?? "—"}</div>
-      <div className="px-3 truncate" style={{ width: COLS[2].width, flexShrink: 0 }}>{row.dependencia ?? "—"}</div>
-      <div className="px-3 truncate" style={{ width: COLS[3].width, flexShrink: 0 }}>{row.tercero ?? "—"}</div>
-      <div className="px-3 font-medium truncate" style={{ width: COLS[4].width, flexShrink: 0 }}>{row.referencia}</div>
-      <div className="px-3 truncate" style={{ width: COLS[5].width, flexShrink: 0 }} title={row.grupo ?? undefined}>{row.grupo ?? "—"}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[6].width, flexShrink: 0 }}>{formatNumber(row.cantidad)}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[7].width, flexShrink: 0 }}>{formatCurrency(row.precio_unitario ?? 0)}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[8].width, flexShrink: 0 }}>
+      <div className="px-3 truncate" style={{ width: COLS[0].width, flexShrink: 0 }} title={row.vendedor ?? undefined}>{row.vendedor ?? "—"}</div>
+      <div className="px-3 truncate" style={{ width: COLS[1].width, flexShrink: 0 }} title={row.tercero ?? undefined}>{row.tercero ?? "—"}</div>
+      <div className="px-3 truncate" style={{ width: COLS[2].width, flexShrink: 0 }} title={row.grupo ?? undefined}>{row.grupo ?? "—"}</div>
+      <div className="px-3 font-medium truncate" style={{ width: COLS[3].width, flexShrink: 0 }} title={row.referencia}>{row.referencia}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[4].width, flexShrink: 0 }}>{formatCurrency(row.precio_unitario ?? 0)}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[5].width, flexShrink: 0 }}>
         {row.ctu !== null ? formatCurrency(row.ctu) : <span className="text-[10px] text-muted-foreground">—</span>}
       </div>
-      <div className={cn("px-3 text-right tabular-nums", row.ctu !== null && (margenU ?? 0) < 0 && "text-rose-600")} style={{ width: COLS[9].width, flexShrink: 0 }}>
+      <div className={cn("px-3 text-right tabular-nums", row.ctu !== null && (margenU ?? 0) < 0 && "text-rose-600")} style={{ width: COLS[6].width, flexShrink: 0 }}>
         {row.ctu !== null && margenU !== null ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
       </div>
-      <div className={cn("px-3 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")} style={{ width: COLS[10].width, flexShrink: 0 }}>
+      <div className={cn("px-3 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")} style={{ width: COLS[7].width, flexShrink: 0 }}>
         {row.margenPct === null ? "—" : formatPercent(row.margenPct, 1)}
       </div>
     </div>
@@ -653,8 +644,8 @@ export function AnalisisVentasPage() {
     terceros: [] as string[],
   });
   const [search, setSearch] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
-  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [sortKey, setSortKey] = React.useState<SortKey>("vendedor");
+  const [sortDir, setSortDir] = React.useState<SortDir>("asc");
   const [activeTab, setActiveTab] = React.useState<"ref" | "grupo">("ref");
   const [groupSortKey, setGroupSortKey] = React.useState<GroupSortKey>("ventas");
   const [groupSortDir, setGroupSortDir] = React.useState<SortDir>("desc");
