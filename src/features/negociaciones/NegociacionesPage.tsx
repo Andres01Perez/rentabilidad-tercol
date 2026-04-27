@@ -54,6 +54,8 @@ export function NegociacionesPage() {
 
   const refresh = React.useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: NEGOTIATIONS_KEY });
+    // Calculadora consume las negociaciones como fuente: invalidar su cache.
+    void queryClient.invalidateQueries({ queryKey: ["calc"] });
   }, [queryClient]);
 
   const handleDelete = async () => {
