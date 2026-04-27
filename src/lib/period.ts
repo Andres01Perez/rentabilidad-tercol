@@ -51,26 +51,51 @@ export function previousMonth(value: string): string {
   return monthToDate(d.getFullYear(), d.getMonth());
 }
 
+// Caché de Intl.NumberFormat: instanciar es caro (~0.1-1ms cada uno).
+// Para tablas con miles de filas, reutilizar la misma instancia ahorra mucho tiempo.
+const _numberFmtCache = new Map<string, Intl.NumberFormat>();
+function getNumberFmt(opts?: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = opts ? JSON.stringify(opts) : "_default";
+  let fmt = _numberFmtCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("es-CO", opts);
+    _numberFmtCache.set(key, fmt);
+  }
+  return fmt;
+}
+
+const _currencyFmt = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+const _percentFmtCache = new Map<number, Intl.NumberFormat>();
+function getPercentFmt(decimals: number): Intl.NumberFormat {
+  let fmt = _percentFmtCache.get(decimals);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("es-CO", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    _percentFmtCache.set(decimals, fmt);
+  }
+  return fmt;
+}
+
 export function formatNumber(n: number | null | undefined, opts?: Intl.NumberFormatOptions): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("es-CO", opts).format(n);
+  return getNumberFmt(opts).format(n);
 }
 
 export function formatCurrency(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return _currencyFmt.format(n);
 }
 
 export function formatPercent(n: number | null | undefined, decimals = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  return `${new Intl.NumberFormat("es-CO", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(n)}%`;
+  return `${getPercentFmt(decimals).format(n)}%`;
 }
 
 /** Parse "YYYY-MM-DD" into a local Date (no timezone shift). */

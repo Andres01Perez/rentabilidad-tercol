@@ -114,10 +114,14 @@ const MultiSelectFilter = React.memo(function MultiSelectFilter({
   onChange: (next: string[]) => void;
 }) {
   const [search, setSearch] = React.useState("");
-  const filtered = React.useMemo(
-    () => options.filter((o) => o.toLowerCase().includes(search.toLowerCase())),
-    [options, search],
-  );
+  // El input responde al instante; el filtrado de opciones (puede ser de
+  // miles de terceros) se aplica con valor diferido.
+  const deferredSearch = React.useDeferredValue(search);
+  const filtered = React.useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, deferredSearch]);
   const toggle = (v: string) => {
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
   };
@@ -480,6 +484,9 @@ export function AnalisisVentasPage() {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  // El input responde al instante; el RPC sólo se dispara con el valor diferido
+  // (combinado con el debounce interno del hook).
+  const deferredSearch = React.useDeferredValue(search);
 
   const appliedFilters = React.useMemo(
     () => ({
@@ -504,7 +511,7 @@ export function AnalisisVentasPage() {
     costPeriodMonth: applied.costPeriod,
     financialDiscountPct: applied.financialDiscountPct,
     filters: appliedFilters,
-    search,
+    search: deferredSearch,
     sortKey,
     sortDir,
     limit: 500,
@@ -514,6 +521,25 @@ export function AnalisisVentasPage() {
 
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
   const discountOptions = analytics.financialDiscounts;
+
+  // Estabilizamos las referencias de `uniques` por contenido para evitar
+  // re-renders en cascada de los `MultiSelectFilter` cuando el hook devuelve
+  // un objeto nuevo con los mismos arrays.
+  const vendedoresOptions = React.useMemo(
+    () => analytics.uniques.vendedores,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.vendedores.join("|")],
+  );
+  const dependenciasOptions = React.useMemo(
+    () => analytics.uniques.dependencias,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.dependencias.join("|")],
+  );
+  const tercerosOptions = React.useMemo(
+    () => analytics.uniques.terceros,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.terceros.join("|")],
+  );
 
   React.useEffect(() => {
     if (discountOptions.length === 0) return;
@@ -696,19 +722,19 @@ export function AnalisisVentasPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <MultiSelectFilter
                     label="Vendedor"
-                    options={analytics.uniques.vendedores}
+                    options={vendedoresOptions}
                     selected={draftVendedoresF}
                     onChange={setDraftVendedoresF}
                   />
                   <MultiSelectFilter
                     label="Dependencia"
-                    options={analytics.uniques.dependencias}
+                    options={dependenciasOptions}
                     selected={draftDependenciasF}
                     onChange={setDraftDependenciasF}
                   />
                   <MultiSelectFilter
                     label="Tercero"
-                    options={analytics.uniques.terceros}
+                    options={tercerosOptions}
                     selected={draftTercerosF}
                     onChange={setDraftTercerosF}
                   />
