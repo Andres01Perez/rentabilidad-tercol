@@ -243,6 +243,7 @@ export interface DetailRow {
   dependencia: string | null;
   tercero: string | null;
   referencia: string;
+  grupo: string | null;
   cantidad: number;
   valor_total: number;
   precio_unitario: number | null;
@@ -334,6 +335,121 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
   return {
     rows: q.data?.rows ?? [],
     total: q.data?.total ?? 0,
+    loading: q.isFetching,
+  };
+}
+
+// =====================================================================
+// Hook: tabla agregada por grupo
+// =====================================================================
+
+export interface GroupRow {
+  grupo: string;
+  cantidad: number;
+  ventas: number;
+  ventasNetas: number;
+  costo: number;
+  margenBruto: number;
+  margenPct: number | null;
+  participacionPct: number;
+}
+
+export type GroupSortKey =
+  | "grupo"
+  | "cantidad"
+  | "ventas"
+  | "margen"
+  | "margenPct"
+  | "participacion";
+
+export interface UseSalesByGroupArgs {
+  salesMonth: string;
+  costPeriodMonth: string;
+  financialDiscountPct: number;
+  filters: { vendedores: string[]; dependencias: string[]; terceros: string[] };
+  search: string;
+  sortKey: GroupSortKey;
+  sortDir: "asc" | "desc";
+  refreshKey: number;
+  enabled?: boolean;
+}
+
+export function useSalesByGroup(args: UseSalesByGroupArgs) {
+  const {
+    salesMonth,
+    costPeriodMonth,
+    financialDiscountPct,
+    filters,
+    search,
+    sortKey,
+    sortDir,
+    refreshKey,
+    enabled = true,
+  } = args;
+  const vKey = filters.vendedores.join("|");
+  const dKey = filters.dependencias.join("|");
+  const tKey = filters.terceros.join("|");
+
+  const [debouncedSearch, setDebouncedSearch] = React.useState(search);
+  React.useEffect(() => {
+    const h = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(h);
+  }, [search]);
+
+  const q = useQuery({
+    queryKey: [
+      "sales-analytics",
+      "by-group",
+      salesMonth,
+      costPeriodMonth,
+      financialDiscountPct,
+      vKey,
+      dKey,
+      tKey,
+      debouncedSearch,
+      sortKey,
+      sortDir,
+      refreshKey,
+    ] as const,
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_sales_by_group", {
+        p_sales_month: salesMonth,
+        p_cost_month: costPeriodMonth,
+        p_financial_pct: financialDiscountPct,
+        p_vendedores: vKey ? vKey.split("|") : undefined,
+        p_dependencias: dKey ? dKey.split("|") : undefined,
+        p_terceros: tKey ? tKey.split("|") : undefined,
+        p_search: debouncedSearch || undefined,
+        p_sort_key: sortKey,
+        p_sort_dir: sortDir,
+      });
+      if (error) throw error;
+      const j = (data ?? {}) as {
+        rows?: GroupRow[];
+        totalVentas?: number;
+        totalGrupos?: number;
+      };
+      return {
+        rows: (j.rows ?? []).map((r) => ({
+          grupo: r.grupo,
+          cantidad: Number(r.cantidad ?? 0),
+          ventas: Number(r.ventas ?? 0),
+          ventasNetas: Number(r.ventasNetas ?? 0),
+          costo: Number(r.costo ?? 0),
+          margenBruto: Number(r.margenBruto ?? 0),
+          margenPct: r.margenPct === null || r.margenPct === undefined ? null : Number(r.margenPct),
+          participacionPct: Number(r.participacionPct ?? 0),
+        })) as GroupRow[],
+        totalVentas: Number(j.totalVentas ?? 0),
+        totalGrupos: Number(j.totalGrupos ?? 0),
+      };
+    },
+  });
+  return {
+    rows: q.data?.rows ?? [],
+    totalVentas: q.data?.totalVentas ?? 0,
+    totalGrupos: q.data?.totalGrupos ?? 0,
     loading: q.isFetching,
   };
 }
