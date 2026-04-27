@@ -37,7 +37,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSalesAnalytics, useSalesDetail, type RankingItem, type DetailRow } from "./useSalesAnalytics";
+import {
+  useSalesAnalytics,
+  useSalesDetail,
+  useSalesByGroup,
+  type RankingItem,
+  type DetailRow,
+  type GroupRow,
+  type GroupSortKey,
+} from "./useSalesAnalytics";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 // El dialog de subida es secundario y pesado (xlsx parser, etc.):
 // lo cargamos perezosamente para que NO viaje en el chunk inicial de la página.
 const UploadVentasDialog = React.lazy(() =>
@@ -301,6 +310,7 @@ type SortKey =
   | "dependencia"
   | "tercero"
   | "referencia"
+  | "grupo"
   | "cantidad"
   | "precio_unitario"
   | "ctu"
@@ -360,6 +370,7 @@ const COLS: Array<{ key: SortKey; label: string; width: number; align: "left" | 
   { key: "dependencia", label: "Dependencia", width: 150, align: "left" },
   { key: "tercero", label: "Tercero", width: 220, align: "left" },
   { key: "referencia", label: "Ref", width: 140, align: "left" },
+  { key: "grupo", label: "Grupo", width: 130, align: "left" },
   { key: "cantidad", label: "Cant", width: 90, align: "right" },
   { key: "precio_unitario", label: "PUV", width: 110, align: "right" },
   { key: "ctu", label: "CTU", width: 110, align: "right" },
@@ -379,15 +390,16 @@ const VirtualRow = React.memo(function VirtualRow({ row }: { row: DetailRow }) {
       <div className="px-3 truncate" style={{ width: COLS[2].width, flexShrink: 0 }}>{row.dependencia ?? "—"}</div>
       <div className="px-3 truncate" style={{ width: COLS[3].width, flexShrink: 0 }}>{row.tercero ?? "—"}</div>
       <div className="px-3 font-medium truncate" style={{ width: COLS[4].width, flexShrink: 0 }}>{row.referencia}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[5].width, flexShrink: 0 }}>{formatNumber(row.cantidad)}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[6].width, flexShrink: 0 }}>{formatCurrency(row.precio_unitario ?? 0)}</div>
-      <div className="px-3 text-right tabular-nums" style={{ width: COLS[7].width, flexShrink: 0 }}>
+      <div className="px-3 truncate" style={{ width: COLS[5].width, flexShrink: 0 }} title={row.grupo ?? undefined}>{row.grupo ?? "—"}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[6].width, flexShrink: 0 }}>{formatNumber(row.cantidad)}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[7].width, flexShrink: 0 }}>{formatCurrency(row.precio_unitario ?? 0)}</div>
+      <div className="px-3 text-right tabular-nums" style={{ width: COLS[8].width, flexShrink: 0 }}>
         {row.ctu !== null ? formatCurrency(row.ctu) : <span className="text-[10px] text-muted-foreground">—</span>}
       </div>
-      <div className={cn("px-3 text-right tabular-nums", row.ctu !== null && (margenU ?? 0) < 0 && "text-rose-600")} style={{ width: COLS[8].width, flexShrink: 0 }}>
+      <div className={cn("px-3 text-right tabular-nums", row.ctu !== null && (margenU ?? 0) < 0 && "text-rose-600")} style={{ width: COLS[9].width, flexShrink: 0 }}>
         {row.ctu !== null && margenU !== null ? formatCurrency(margenU) : <span className="text-muted-foreground">—</span>}
       </div>
-      <div className={cn("px-3 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")} style={{ width: COLS[9].width, flexShrink: 0 }}>
+      <div className={cn("px-3 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")} style={{ width: COLS[10].width, flexShrink: 0 }}>
         {row.margenPct === null ? "—" : formatPercent(row.margenPct, 1)}
       </div>
     </div>
@@ -464,6 +476,159 @@ function DetailVirtualTable({
   );
 }
 
+// ===================== Tabla por grupo =====================
+
+const GROUP_COLS: Array<{
+  key: GroupSortKey;
+  label: string;
+  align: "left" | "right";
+}> = [
+  { key: "grupo", label: "Grupo", align: "left" },
+  { key: "cantidad", label: "Cantidad", align: "right" },
+  { key: "ventas", label: "Ventas totales", align: "right" },
+  { key: "margen", label: "Margen bruto $", align: "right" },
+  { key: "margenPct", label: "Margen bruto %", align: "right" },
+  { key: "participacion", label: "% Participación", align: "right" },
+];
+
+function GroupSortableHead({
+  label,
+  sortKey,
+  current,
+  dir,
+  onClick,
+  align,
+}: {
+  label: string;
+  sortKey: GroupSortKey;
+  current: GroupSortKey;
+  dir: SortDir;
+  onClick: (k: GroupSortKey) => void;
+  align: "left" | "right";
+}) {
+  const active = current === sortKey;
+  return (
+    <th
+      className={cn(
+        "h-10 px-3 text-xs font-medium border-b border-border/40 bg-card/95",
+        align === "right" ? "text-right" : "text-left",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+          align === "right" && "ml-auto",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        <span>{label}</span>
+        {active ? (
+          dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronsUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+}
+
+const GroupTable = React.memo(function GroupTable({
+  rows,
+  sortKey,
+  sortDir,
+  onToggleSort,
+}: {
+  rows: GroupRow[];
+  sortKey: GroupSortKey;
+  sortDir: SortDir;
+  onToggleSort: (k: GroupSortKey) => void;
+}) {
+  const totals = React.useMemo(() => {
+    return rows.reduce(
+      (acc, r) => {
+        acc.cantidad += r.cantidad;
+        acc.ventas += r.ventas;
+        acc.margenBruto += r.margenBruto;
+        acc.ventasNetas += r.ventasNetas;
+        acc.participacion += r.participacionPct;
+        return acc;
+      },
+      { cantidad: 0, ventas: 0, margenBruto: 0, ventasNetas: 0, participacion: 0 },
+    );
+  }, [rows]);
+
+  const totalMarginPct =
+    totals.ventasNetas !== 0 ? (totals.margenBruto / totals.ventasNetas) * 100 : null;
+
+  return (
+    <div className="mt-4 max-h-[calc(100vh-200px)] min-h-[400px] overflow-auto rounded-xl border border-border/40">
+      <table className="w-full caption-bottom text-sm">
+        <thead className="sticky top-0 z-10">
+          <tr>
+            {GROUP_COLS.map((c) => (
+              <GroupSortableHead
+                key={c.key}
+                label={c.label}
+                sortKey={c.key}
+                current={sortKey}
+                dir={sortDir}
+                onClick={onToggleSort}
+                align={c.align}
+              />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={GROUP_COLS.length} className="py-8 text-center text-sm text-muted-foreground">
+                Sin datos para el período y filtros seleccionados.
+              </td>
+            </tr>
+          ) : (
+            rows.map((r) => {
+              const isNeg$ = r.margenBruto < 0;
+              const isNegPct = (r.margenPct ?? 0) < 0;
+              return (
+                <tr key={r.grupo} className="border-b border-border/40 hover:bg-accent/30">
+                  <td className="px-3 py-2 font-medium">{r.grupo}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatNumber(r.cantidad)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(r.ventas)}</td>
+                  <td className={cn("px-3 py-2 text-right tabular-nums", isNeg$ && "text-rose-600")}>
+                    {formatCurrency(r.margenBruto)}
+                  </td>
+                  <td className={cn("px-3 py-2 text-right tabular-nums", isNegPct && "font-semibold text-rose-600")}>
+                    {r.margenPct === null ? "—" : formatPercent(r.margenPct, 1)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatPercent(r.participacionPct, 1)}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="border-t-2 border-border/60 bg-muted/40 font-semibold">
+              <td className="px-3 py-2">Total</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatNumber(totals.cantidad)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(totals.ventas)}</td>
+              <td className={cn("px-3 py-2 text-right tabular-nums", totals.margenBruto < 0 && "text-rose-600")}>
+                {formatCurrency(totals.margenBruto)}
+              </td>
+              <td className={cn("px-3 py-2 text-right tabular-nums", (totalMarginPct ?? 0) < 0 && "text-rose-600")}>
+                {totalMarginPct === null ? "—" : formatPercent(totalMarginPct, 1)}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatPercent(totals.participacion, 1)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+});
+
 export function AnalisisVentasPage() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -490,6 +655,9 @@ export function AnalisisVentasPage() {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [activeTab, setActiveTab] = React.useState<"ref" | "grupo">("ref");
+  const [groupSortKey, setGroupSortKey] = React.useState<GroupSortKey>("ventas");
+  const [groupSortDir, setGroupSortDir] = React.useState<SortDir>("desc");
   // El input responde al instante; el RPC sólo se dispara con el valor diferido
   // (combinado con el debounce interno del hook).
   const deferredSearch = React.useDeferredValue(search);
@@ -522,7 +690,19 @@ export function AnalisisVentasPage() {
     sortDir,
     limit: 500,
     refreshKey,
-    enabled: analytics.hasAnySales,
+    enabled: analytics.hasAnySales && activeTab === "ref",
+  });
+
+  const grouped = useSalesByGroup({
+    salesMonth: applied.salesMonth,
+    costPeriodMonth: applied.costPeriod,
+    financialDiscountPct: applied.financialDiscountPct,
+    filters: appliedFilters,
+    search: deferredSearch,
+    sortKey: groupSortKey,
+    sortDir: groupSortDir,
+    refreshKey,
+    enabled: analytics.hasAnySales && activeTab === "grupo",
   });
 
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
@@ -580,6 +760,17 @@ export function AnalisisVentasPage() {
         return cur;
       }
       setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const toggleGroupSort = React.useCallback((key: GroupSortKey) => {
+    setGroupSortKey((cur) => {
+      if (cur === key) {
+        setGroupSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return cur;
+      }
+      setGroupSortDir("desc");
       return key;
     });
   }, []);
@@ -868,39 +1059,74 @@ export function AnalisisVentasPage() {
             <RankingCard title="Top productos · margen bruto" items={analytics.rankings.productos} flagNegative />
           </div>
 
-          {/* Tabla detalle */}
+          {/* Detalle: tabs por referencia y por grupo */}
           <div className="glass rounded-2xl border border-border/60 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold">Detalle de ventas</h3>
-                <p className="text-xs text-muted-foreground">
-                  Mostrando {formatNumber(detail.rows.length)} de {formatNumber(detail.total)} líneas filtradas
-                  {detail.loading && <span className="ml-2 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> actualizando…</span>}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasAnyFilter && (
-                  <Button variant="outline" size="sm" onClick={clearAllFilters} className="gap-1.5">
-                    <X className="h-3.5 w-3.5" /> Limpiar filtros
-                  </Button>
-                )}
-                <div className="relative w-72">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar referencia, tercero o vendedor…"
-                    className="h-9 pl-8"
-                  />
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "ref" | "grupo")}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold">Detalle de ventas</h3>
+                  <TabsList>
+                    <TabsTrigger value="ref">Por referencia</TabsTrigger>
+                    <TabsTrigger value="grupo">Por grupo</TabsTrigger>
+                  </TabsList>
+                  {activeTab === "ref" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Mostrando {formatNumber(detail.rows.length)} de {formatNumber(detail.total)} líneas filtradas
+                      {detail.loading && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> actualizando…
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {formatNumber(grouped.totalGrupos)} grupos · ventas totales {formatCurrency(grouped.totalVentas)}
+                      {grouped.loading && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> actualizando…
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasAnyFilter && (
+                    <Button variant="outline" size="sm" onClick={clearAllFilters} className="gap-1.5">
+                      <X className="h-3.5 w-3.5" /> Limpiar filtros
+                    </Button>
+                  )}
+                  <div className="relative w-72">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder={
+                        activeTab === "ref"
+                          ? "Buscar referencia, tercero, vendedor o grupo…"
+                          : "Buscar grupo, referencia, tercero o vendedor…"
+                      }
+                      className="h-9 pl-8"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            <DetailVirtualTable
-              rows={detail.rows}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onToggleSort={toggleSort}
-            />
+              <TabsContent value="ref" className="mt-0">
+                <DetailVirtualTable
+                  rows={detail.rows}
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onToggleSort={toggleSort}
+                />
+              </TabsContent>
+              <TabsContent value="grupo" className="mt-0">
+                <GroupTable
+                  rows={grouped.rows}
+                  sortKey={groupSortKey}
+                  sortDir={groupSortDir}
+                  onToggleSort={toggleGroupSort}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         </>
       )}
