@@ -114,10 +114,14 @@ const MultiSelectFilter = React.memo(function MultiSelectFilter({
   onChange: (next: string[]) => void;
 }) {
   const [search, setSearch] = React.useState("");
-  const filtered = React.useMemo(
-    () => options.filter((o) => o.toLowerCase().includes(search.toLowerCase())),
-    [options, search],
-  );
+  // El input responde al instante; el filtrado de opciones (puede ser de
+  // miles de terceros) se aplica con valor diferido.
+  const deferredSearch = React.useDeferredValue(search);
+  const filtered = React.useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, deferredSearch]);
   const toggle = (v: string) => {
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
   };
