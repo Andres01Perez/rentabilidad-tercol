@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser, type TercolUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER, type TercolUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 
 interface UserSwitcherProps {
@@ -25,12 +25,11 @@ interface UserSwitcherProps {
 export function UserSwitcher({ collapsed }: UserSwitcherProps) {
   const { user, setUser, clearUser } = useCurrentUser();
   // Evitamos hydration mismatch: el primer render (SSR + primer paint del
-  // cliente) muestra siempre "Sistema". Solo después de montar leemos la
-  // identidad real desde sessionStorage. Sin esto, React tira el árbol del
-  // layout y lo regenera (parpadeo + ~300 ms extra por vista).
+  // cliente) muestra siempre el usuario por defecto. Tras montar leemos la
+  // identidad real desde sessionStorage.
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
-  const displayUser = mounted ? user : null;
+  const displayUser: TercolUser = mounted ? user ?? DEFAULT_USER : DEFAULT_USER;
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [users, setUsers] = React.useState<TercolUser[]>([]);
@@ -109,17 +108,15 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
   const handleClear = () => {
     clearUser();
     setOpen(false);
-    toast.success("Identidad cerrada · firmando como Sistema");
+    toast.success(`Firmando como ${DEFAULT_USER.name}`);
   };
 
-  const initials = displayUser
-    ? displayUser.name
-        .split(" ")
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "S";
+  const initials = displayUser.name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -129,7 +126,7 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
             "flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-accent",
             collapsed && "justify-center",
           )}
-          title={displayUser?.name ?? "Sistema (sin firma)"}
+          title={displayUser.name}
           suppressHydrationWarning
         >
           <div
@@ -142,13 +139,13 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
             <>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold" suppressHydrationWarning>
-                  {displayUser?.name ?? "Sistema"}
+                  {displayUser.name}
                 </p>
                 <p
                   className="text-[10px] uppercase tracking-wider text-muted-foreground"
                   suppressHydrationWarning
                 >
-                  {displayUser ? "Firmando" : "Sin firma"}
+                  Firmando
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -226,14 +223,14 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
           </div>
         </div>
 
-        {user && (
+        {user && user.id !== DEFAULT_USER.id && (
           <div className="border-t border-border/60 p-1">
             <button
               onClick={handleClear}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <LogOut className="h-3.5 w-3.5" />
-              Cerrar identidad (volver a Sistema)
+              Restablecer a {DEFAULT_USER.name}
             </button>
           </div>
         )}
