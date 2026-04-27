@@ -912,7 +912,16 @@ export function AnalisisVentasPage() {
           <UploadVentasDialog
             open={uploadOpen}
             onOpenChange={setUploadOpen}
-            onUploaded={() => setRefreshKey((k) => k + 1)}
+            onUploaded={() => {
+              // Tras importar: invalidamos TODAS las queries de esta sección
+              // (dashboard, detalle, meses disponibles, descuentos financieros).
+              // Sin esto, el cache de 60s/5min mostraría datos viejos y el
+              // usuario percibiría que la importación no funcionó.
+              void queryClient.invalidateQueries({ queryKey: ["sales-analytics"] });
+              // Y también las queries de calculadora que dependen de ventas.
+              void queryClient.invalidateQueries({ queryKey: ["calc"] });
+              setRefreshKey((k) => k + 1);
+            }}
           />
         </React.Suspense>
       )}
