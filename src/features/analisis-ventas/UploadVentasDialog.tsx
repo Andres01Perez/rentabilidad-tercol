@@ -202,7 +202,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
             <DialogTitle>Subir Excel de ventas</DialogTitle>
             <DialogDescription>
               Reemplaza completamente las ventas existentes. Columnas esperadas: Año, Mes, Día,
-              Vendedor, Dependencia, Tercero, ProductoC, Valor, Cantidad.
+            Vendedor, Dependencia, Tercero, ProductoC, Grupo, Valor, Cantidad.
             </DialogDescription>
           </DialogHeader>
 
@@ -218,6 +218,11 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
                 <p className="flex items-center gap-2 text-sm font-medium">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   {formatNumber(parsed.length)} filas listas para importar
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Se registrará como{" "}
+                  <span className="font-medium text-foreground">{user?.name ?? "Sistema"}</span>
+                  {!user && " (puedes firmar como un usuario en el menú lateral si quieres dejar tu nombre)."}
                 </p>
                 {warnings.length > 0 && (
                   <ul className="space-y-1 text-xs text-amber-700">
@@ -269,7 +274,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
             </Button>
             <Button
               onClick={requestUpload}
-              disabled={!parsed || parsed.length === 0 || uploading || !user}
+              disabled={!parsed || parsed.length === 0 || uploading}
             >
               {uploading ? (
                 <>
