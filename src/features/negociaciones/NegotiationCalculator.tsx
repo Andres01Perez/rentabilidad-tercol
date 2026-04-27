@@ -465,22 +465,23 @@ export function NegotiationCalculator({
         </div>
       </div>
 
-      {/* KPIs en vivo */}
-      <div
-        className={cn(
-          "glass sticky top-[calc(3.5rem+0.75rem)] z-10 relative overflow-hidden rounded-2xl border p-4 backdrop-blur-xl transition-colors",
-          belowMin
-            ? "border-rose-400/60 bg-rose-50/40 dark:bg-rose-500/5"
-            : okMin
-              ? "border-emerald-400/60 bg-emerald-50/40 dark:bg-emerald-500/5"
-              : "border-border/60",
-        )}
-      >
-        {(liveLoading || pending) && (
-          <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden">
-            <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
-          </div>
-        )}
+      {/* KPIs en vivo (sticky con espaciado respecto al header) */}
+      <div className="sticky top-14 z-10 -mx-1 bg-background/95 px-1 pb-2 pt-3 backdrop-blur-xl">
+        <div
+          className={cn(
+            "relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-colors",
+            belowMin
+              ? "border-rose-400/60 bg-rose-50/90 dark:bg-rose-500/10"
+              : okMin
+                ? "border-emerald-400/60 bg-emerald-50/90 dark:bg-emerald-500/10"
+                : "border-border/60 bg-card/95",
+          )}
+        >
+          {(liveLoading || pending) && (
+            <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden">
+              <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
+            </div>
+          )}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
             icon={Wallet}
@@ -542,6 +543,7 @@ export function NegotiationCalculator({
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Search */}
