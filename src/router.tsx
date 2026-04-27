@@ -1,5 +1,17 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
+import { makeQueryClient } from "./lib/queryClient";
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof getRouter>;
+  }
+}
+
+export interface RouterContext {
+  queryClient: QueryClient;
+}
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
@@ -55,18 +67,20 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
 }
 
 export const getRouter = () => {
+  // Una QueryClient por request — evita filtrar datos entre usuarios en SSR.
+  const queryClient = makeQueryClient();
+
   const router = createRouter({
     routeTree,
-    context: {},
+    context: { queryClient },
     scrollRestoration: true,
-    // Precarga al hacer hover/focus sobre un <Link>: el chunk + loader empiezan
-    // antes del click, haciendo la navegación sentirse instantánea.
-    defaultPreload: "intent",
-    defaultPreloadDelay: 50,
-    // SWR: datos válidos por 30s — al volver a una vista visitada hace poco
-    // se renderiza al instante con datos cacheados y se revalida en background.
-    defaultPreloadStaleTime: 30_000,
-    defaultStaleTime: 30_000,
+    // Sin preload por hover: estaba saturando Supabase con peticiones de
+    // 6 vistas cada vez que el usuario pasaba el mouse por el sidebar.
+    // El cache real ahora vive en TanStack Query (60s staleTime).
+    defaultPreload: false,
+    // Cuando se usa Query como cache, el del router debe ser 0 para no
+    // ocultar la lógica de freshness de Query.
+    defaultPreloadStaleTime: 0,
     defaultErrorComponent: DefaultErrorComponent,
   });
 
