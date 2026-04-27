@@ -209,21 +209,27 @@ export function useSalesAnalytics(args: UseSalesAnalyticsArgs) {
     return () => { cancelled = true; };
   }, [salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, vendedoresKey, dependenciasKey, tercerosKey, refreshKey]);
 
-  return {
-    loading,
-    hasLoadedOnce,
-    hasAnySales: data.hasAnySales,
-    salesMonths,
-    financialDiscounts,
-    pctOperacional: data.kpis.pctOperacional,
-    operationalBreakdown: data.operationalBreakdown,
-    kpis: data.kpis,
-    monthlySeries: data.monthlySeries,
-    dailySeries: data.dailySeries,
-    rankings: data.rankings,
-    uniques: data.uniques,
-    ctuMapSize: data.ctuMapSize,
-  };
+  // Estabilizamos el objeto de retorno para que componentes consumidores
+  // memoizados (KpiCard, MultiSelectFilter, etc.) no vean nuevas referencias
+  // en cada render del padre cuando los datos no cambiaron.
+  return React.useMemo(
+    () => ({
+      loading,
+      hasLoadedOnce,
+      hasAnySales: data.hasAnySales,
+      salesMonths,
+      financialDiscounts,
+      pctOperacional: data.kpis.pctOperacional,
+      operationalBreakdown: data.operationalBreakdown,
+      kpis: data.kpis,
+      monthlySeries: data.monthlySeries,
+      dailySeries: data.dailySeries,
+      rankings: data.rankings,
+      uniques: data.uniques,
+      ctuMapSize: data.ctuMapSize,
+    }),
+    [loading, hasLoadedOnce, data, salesMonths, financialDiscounts],
+  );
 }
 
 // =====================================================================
