@@ -1,6 +1,10 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  monthCatalogQueryOptions,
+  sourceOptionsQueryOptions,
+} from "./queries";
 
 export type SourceKind = "price_list" | "negotiation";
 
@@ -63,8 +67,6 @@ export interface RentabilidadRow {
  * `product_costs` y `operational_costs` desde el cliente.
  */
 export function useMonthCatalog() {
-  // Import dinámico para evitar ciclo: queries.ts importa tipos de este archivo.
-  const { monthCatalogQueryOptions } = require("./queries") as typeof import("./queries");
   const { data, isLoading } = useQuery(monthCatalogQueryOptions());
   return {
     costMonths: data?.costMonths ?? [],
@@ -75,7 +77,6 @@ export function useMonthCatalog() {
 
 /** Lista de fuentes según el tipo elegido. */
 export function useSourceOptions(kind: SourceKind) {
-  const { sourceOptionsQueryOptions } = require("./queries") as typeof import("./queries");
   const { data, isFetching } = useQuery(sourceOptionsQueryOptions(kind));
   return { options: data ?? [], loading: isFetching };
 }
