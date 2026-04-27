@@ -478,7 +478,7 @@ export function NegotiationCalculator({
             <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
             icon={Wallet}
             label="Ventas netas"
@@ -509,20 +509,6 @@ export function NegotiationCalculator({
             }
             tone={belowMin ? "negative" : okMin ? "positive" : "default"}
             hint={`Meta ${formatPercent(minMarginPct, 0)}`}
-          />
-          <Kpi
-            icon={Percent}
-            label="Margen neto %"
-            value={
-              totals.ventasNetas === 0 ? "—" : formatPercent(totals.margenNetoPct, 1)
-            }
-            hint={`Op. ${formatPercent(totals.avgOpPct, 1)}`}
-          />
-          <Kpi
-            icon={PiggyBank}
-            label="Margen neto $"
-            value={formatCurrency(totals.margenNeto)}
-            tone={totals.margenNeto >= 0 ? "positive" : "negative"}
           />
         </div>
 
