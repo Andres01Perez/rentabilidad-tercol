@@ -158,11 +158,13 @@ export type Database = {
       }
       negotiations: {
         Row: {
+          cost_months: string[]
           created_at: string
           created_by_id: string | null
           created_by_name: string
           id: string
           items_count: number
+          min_margin_pct: number
           name: string
           notes: string | null
           source_price_list_id: string | null
@@ -172,11 +174,13 @@ export type Database = {
           updated_by_name: string | null
         }
         Insert: {
+          cost_months?: string[]
           created_at?: string
           created_by_id?: string | null
           created_by_name: string
           id?: string
           items_count?: number
+          min_margin_pct?: number
           name: string
           notes?: string | null
           source_price_list_id?: string | null
@@ -186,11 +190,13 @@ export type Database = {
           updated_by_name?: string | null
         }
         Update: {
+          cost_months?: string[]
           created_at?: string
           created_by_id?: string | null
           created_by_name?: string
           id?: string
           items_count?: number
+          min_margin_pct?: number
           name?: string
           notes?: string | null
           source_price_list_id?: string | null
@@ -534,10 +540,21 @@ export type Database = {
           product_count: number
         }[]
       }
+      get_negotiation_realtime: {
+        Args: {
+          p_cost_months: string[]
+          p_items: Json
+          p_min_margin_pct?: number
+          p_op_months: string[]
+          p_source_price_list_id?: string
+          p_top_suggestions?: number
+        }
+        Returns: Json
+      }
       get_period_catalog: { Args: never; Returns: Json }
       get_sales_by_group: {
         Args: {
-          p_cost_month: string
+          p_cost_months: string[]
           p_dependencias?: string[]
           p_financial_pct: number
           p_sales_month: string
@@ -551,7 +568,7 @@ export type Database = {
       }
       get_sales_dashboard: {
         Args: {
-          p_cost_month: string
+          p_cost_months: string[]
           p_dependencias?: string[]
           p_financial_pct: number
           p_op_month: string
@@ -563,7 +580,7 @@ export type Database = {
       }
       get_sales_detail: {
         Args: {
-          p_cost_month: string
+          p_cost_months: string[]
           p_dependencias?: string[]
           p_financial_pct: number
           p_limit?: number
