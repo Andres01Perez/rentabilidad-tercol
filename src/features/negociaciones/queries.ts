@@ -8,6 +8,23 @@ export const negotiationItemsKey = (id: string) =>
   ["negotiation-items", id] as const;
 export const referenceSearchKey = (q: string) =>
   ["ref-search", q] as const;
+export const negotiationLiveKey = (
+  itemsHash: string,
+  costMonths: string[],
+  opMonths: string[],
+  minMarginPct: number,
+  topSuggestions: number,
+  sourcePriceListId: string | null,
+) =>
+  [
+    "negotiation-live",
+    itemsHash,
+    costMonths.slice().sort().join("|"),
+    opMonths.slice().sort().join("|"),
+    minMarginPct,
+    topSuggestions,
+    sourcePriceListId ?? "",
+  ] as const;
 
 export const negotiationsQueryOptions = () =>
   queryOptions({
