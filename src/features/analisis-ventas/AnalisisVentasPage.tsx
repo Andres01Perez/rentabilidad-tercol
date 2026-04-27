@@ -484,6 +484,9 @@ export function AnalisisVentasPage() {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("sale_date");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  // El input responde al instante; el RPC sólo se dispara con el valor diferido
+  // (combinado con el debounce interno del hook).
+  const deferredSearch = React.useDeferredValue(search);
 
   const appliedFilters = React.useMemo(
     () => ({
@@ -508,7 +511,7 @@ export function AnalisisVentasPage() {
     costPeriodMonth: applied.costPeriod,
     financialDiscountPct: applied.financialDiscountPct,
     filters: appliedFilters,
-    search,
+    search: deferredSearch,
     sortKey,
     sortDir,
     limit: 500,
@@ -518,6 +521,25 @@ export function AnalisisVentasPage() {
 
   const salesMonthOptions = React.useMemo(() => mapMonthOptions(analytics.salesMonths), [analytics.salesMonths]);
   const discountOptions = analytics.financialDiscounts;
+
+  // Estabilizamos las referencias de `uniques` por contenido para evitar
+  // re-renders en cascada de los `MultiSelectFilter` cuando el hook devuelve
+  // un objeto nuevo con los mismos arrays.
+  const vendedoresOptions = React.useMemo(
+    () => analytics.uniques.vendedores,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.vendedores.join("|")],
+  );
+  const dependenciasOptions = React.useMemo(
+    () => analytics.uniques.dependencias,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.dependencias.join("|")],
+  );
+  const tercerosOptions = React.useMemo(
+    () => analytics.uniques.terceros,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analytics.uniques.terceros.join("|")],
+  );
 
   React.useEffect(() => {
     if (discountOptions.length === 0) return;
