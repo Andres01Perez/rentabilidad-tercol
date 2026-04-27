@@ -165,7 +165,7 @@ function AssignmentsTab() {
           centers={availableCenters}
           month={month}
           userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
+          userName={user?.name ?? DEFAULT_USER.name}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -436,7 +436,7 @@ function CentersTab() {
         <CenterDialog
           editing={editing}
           userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
+          userName={user?.name ?? DEFAULT_USER.name}
           onClose={() => {
             setCreating(false);
             setEditing(null);

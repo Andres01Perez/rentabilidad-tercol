@@ -320,7 +320,7 @@ export function CostosProductosPage() {
               refresh(m);
             }}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
           />
         </React.Suspense>
       )}

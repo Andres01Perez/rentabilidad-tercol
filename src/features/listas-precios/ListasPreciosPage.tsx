@@ -184,7 +184,7 @@ export function ListasPreciosPage() {
               refresh();
             }}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
           />
         </React.Suspense>
       )}
@@ -199,7 +199,7 @@ export function ListasPreciosPage() {
               refresh();
             }}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
           />
         </React.Suspense>
       )}
