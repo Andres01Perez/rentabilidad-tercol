@@ -66,7 +66,7 @@ export function NegotiationEditor({
   onSaved,
 }: {
   negotiation: NegotiationRow | null;
-  userId: string;
+  userId: string | null;
   userName: string;
   onClose: () => void;
   onSaved: () => void;

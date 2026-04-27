@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Tags,
@@ -10,7 +10,6 @@ import {
   TrendingUp,
   History,
   Settings,
-  LogOut,
   Sparkles,
 } from "lucide-react";
 import {
@@ -26,8 +25,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { UserSwitcher } from "@/components/layout/UserSwitcher";
 
 type NavItem = {
   title: string;
@@ -125,24 +124,8 @@ const NavGroup = React.memo(function NavGroup({
 
 export function AppSidebar() {
   const location = useLocation();
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-
-  const handleLogout = () => {
-    logout();
-    navigate({ to: "/login" });
-  };
-
-  const initials = user
-    ? user.name
-        .split(" ")
-        .map((p: string) => p[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "?";
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/60">
@@ -169,24 +152,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-border/60 p-3">
-        <div className={cn("flex items-center gap-3", collapsed && "flex-col")}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-xs font-bold text-white shadow-soft">
-            {initials}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{user?.name ?? "—"}</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">En sesión</p>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        <UserSwitcher collapsed={collapsed} />
       </SidebarFooter>
     </Sidebar>
   );

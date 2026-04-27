@@ -2,7 +2,7 @@ import * as React from "react";
 import { Building2, Plus, Pencil, Loader2, Power } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +79,7 @@ export function CostosOperacionalesPage() {
 }
 
 function AssignmentsTab() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
   const [centers, setCenters] = React.useState<CostCenter[]>([]);
@@ -188,14 +188,14 @@ function AssignmentsTab() {
         </Table>
       </div>
 
-      {(creating || editing) && user && (
+      {(creating || editing) && (
         <AssignmentDialog
           mode={editing ? "edit" : "create"}
           editing={editing}
           centers={availableCenters}
           month={month}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -225,7 +225,7 @@ function AssignmentDialog({
   editing: Assignment | null;
   centers: CostCenter[];
   month: string;
-  userId: string;
+  userId: string | null;
   userName: string;
   onClose: () => void;
   onDone: () => void;
@@ -365,7 +365,7 @@ function AssignmentDialog({
 }
 
 function CentersTab() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [centers, setCenters] = React.useState<CostCenter[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [creating, setCreating] = React.useState(false);
@@ -471,11 +471,11 @@ function CentersTab() {
         </Table>
       </div>
 
-      {(creating || editing) && user && (
+      {(creating || editing) && (
         <CenterDialog
           editing={editing}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -499,7 +499,7 @@ function CenterDialog({
   onDone,
 }: {
   editing: CostCenter | null;
-  userId: string;
+  userId: string | null;
   userName: string;
   onClose: () => void;
   onDone: () => void;

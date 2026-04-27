@@ -2,7 +2,7 @@ import * as React from "react";
 import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,7 +64,7 @@ function pad(n: number) {
 }
 
 export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVentasDialogProps) {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [file, setFile] = React.useState<File | null>(null);
   const [parsing, setParsing] = React.useState(false);
   const [parsed, setParsed] = React.useState<ParsedRow[] | null>(null);
@@ -155,7 +155,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
   };
 
   const performUpload = async () => {
-    if (!parsed || !user) return;
+    if (!parsed) return;
     setConfirmOpen(false);
     setUploading(true);
     try {
@@ -173,8 +173,8 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
         referencia: r.referencia,
         cantidad: r.cantidad,
         valor_total: r.valor_total,
-        created_by_id: user.id,
-        created_by_name: user.name,
+        created_by_id: user?.id ?? null,
+        created_by_name: user?.name ?? "Sistema",
       }));
       await chunkedInsert(payload, 500, async (batch) => {
         const { error } = await supabase.from("sales").insert(batch);

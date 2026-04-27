@@ -2,7 +2,7 @@ import * as React from "react";
 import { Tags, Plus, Eye, RefreshCw, Trash2, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +82,7 @@ const WIZARD_FIELDS: WizardField<ColKey>[] = [
 ];
 
 export function ListasPreciosPage() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [lists, setLists] = React.useState<PriceList[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -206,19 +206,19 @@ export function ListasPreciosPage() {
         </Table>
       </div>
 
-      {createOpen && user && (
+      {createOpen && (
         <CreateListDialog
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);
             void loadLists();
           }}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
         />
       )}
 
-      {replacing && user && (
+      {replacing && (
         <ReplaceListDialog
           list={replacing}
           onClose={() => setReplacing(null)}
@@ -226,8 +226,8 @@ export function ListasPreciosPage() {
             setReplacing(null);
             void loadLists();
           }}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
         />
       )}
 
@@ -259,7 +259,7 @@ function CreateListDialog({
 }: {
   onClose: () => void;
   onCreated: () => void;
-  userId: string;
+  userId: string | null;
   userName: string;
 }) {
   const [name, setName] = React.useState("");
@@ -337,7 +337,7 @@ function ReplaceListDialog({
   list: PriceList;
   onClose: () => void;
   onDone: () => void;
-  userId: string;
+  userId: string | null;
   userName: string;
 }) {
   const handleConfirm = async (rows: Record<ColKey, string | number | null>[]) => {

@@ -1,21 +1,11 @@
 import * as React from "react";
-import { createFileRoute, Outlet, useLocation, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, Link } from "@tanstack/react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ChevronRight } from "lucide-react";
-import { readStoredSession } from "@/lib/session";
 
 export const Route = createFileRoute("/_app")({
-  // Las vistas autenticadas dependen de localStorage. Renderizarlas en el
-  // servidor causa un hydration mismatch (server=null user, client=hydrated)
-  // que provoca re-monte total del árbol y rompe los chunks lazy.
-  ssr: false,
-  beforeLoad: () => {
-    if (typeof window === "undefined") return;
-    const session = readStoredSession();
-    if (!session) throw redirect({ to: "/login" });
-  },
   component: AppLayout,
 });
 
@@ -32,16 +22,11 @@ const ROUTE_LABELS: Record<string, string> = {
 };
 
 function AppLayout() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const location = useLocation();
 
-  // El guard de beforeLoad ya garantiza que existe sesión en localStorage,
-  // y como esta ruta es ssr:false el lazy-init de AuthContext entrega el
-  // user inmediatamente. Si por alguna razón no hay user, no renderizamos
-  // (beforeLoad redirige).
-  if (!user) return null;
-
   const currentLabel = ROUTE_LABELS[location.pathname] ?? "Tercol";
+  const displayName = user?.name ?? "Sistema";
 
   return (
     <SidebarProvider>
@@ -67,7 +52,7 @@ function AppLayout() {
             <div className="ml-auto flex items-center gap-2">
               <span className="hidden items-center gap-2 rounded-full border border-border/60 bg-white/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur md:inline-flex">
                 <span className="h-1.5 w-1.5 rounded-full bg-gradient-brand" />
-                {user.name}
+                {displayName}
               </span>
             </div>
           </header>
