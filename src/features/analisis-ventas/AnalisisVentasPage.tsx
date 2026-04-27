@@ -1059,39 +1059,74 @@ export function AnalisisVentasPage() {
             <RankingCard title="Top productos · margen bruto" items={analytics.rankings.productos} flagNegative />
           </div>
 
-          {/* Tabla detalle */}
+          {/* Detalle: tabs por referencia y por grupo */}
           <div className="glass rounded-2xl border border-border/60 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold">Detalle de ventas</h3>
-                <p className="text-xs text-muted-foreground">
-                  Mostrando {formatNumber(detail.rows.length)} de {formatNumber(detail.total)} líneas filtradas
-                  {detail.loading && <span className="ml-2 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> actualizando…</span>}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasAnyFilter && (
-                  <Button variant="outline" size="sm" onClick={clearAllFilters} className="gap-1.5">
-                    <X className="h-3.5 w-3.5" /> Limpiar filtros
-                  </Button>
-                )}
-                <div className="relative w-72">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar referencia, tercero o vendedor…"
-                    className="h-9 pl-8"
-                  />
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "ref" | "grupo")}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold">Detalle de ventas</h3>
+                  <TabsList>
+                    <TabsTrigger value="ref">Por referencia</TabsTrigger>
+                    <TabsTrigger value="grupo">Por grupo</TabsTrigger>
+                  </TabsList>
+                  {activeTab === "ref" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Mostrando {formatNumber(detail.rows.length)} de {formatNumber(detail.total)} líneas filtradas
+                      {detail.loading && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> actualizando…
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {formatNumber(grouped.totalGrupos)} grupos · ventas totales {formatCurrency(grouped.totalVentas)}
+                      {grouped.loading && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> actualizando…
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasAnyFilter && (
+                    <Button variant="outline" size="sm" onClick={clearAllFilters} className="gap-1.5">
+                      <X className="h-3.5 w-3.5" /> Limpiar filtros
+                    </Button>
+                  )}
+                  <div className="relative w-72">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder={
+                        activeTab === "ref"
+                          ? "Buscar referencia, tercero, vendedor o grupo…"
+                          : "Buscar grupo, referencia, tercero o vendedor…"
+                      }
+                      className="h-9 pl-8"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            <DetailVirtualTable
-              rows={detail.rows}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onToggleSort={toggleSort}
-            />
+              <TabsContent value="ref" className="mt-0">
+                <DetailVirtualTable
+                  rows={detail.rows}
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onToggleSort={toggleSort}
+                />
+              </TabsContent>
+              <TabsContent value="grupo" className="mt-0">
+                <GroupTable
+                  rows={grouped.rows}
+                  sortKey={groupSortKey}
+                  sortDir={groupSortDir}
+                  onToggleSort={toggleGroupSort}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         </>
       )}
