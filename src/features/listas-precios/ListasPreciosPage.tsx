@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Tags, Plus, Eye, RefreshCw, Trash2, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
-import { useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -82,7 +82,7 @@ const WIZARD_FIELDS: WizardField<ColKey>[] = [
 export function ListasPreciosPage() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const { data: lists, isFetching } = useSuspenseQuery(priceListsQueryOptions());
+  const { data: lists = [], isFetching } = useQuery(priceListsQueryOptions());
   const [createOpen, setCreateOpen] = React.useState(false);
   const [viewing, setViewing] = React.useState<PriceListRow | null>(null);
   const [replacing, setReplacing] = React.useState<PriceListRow | null>(null);
