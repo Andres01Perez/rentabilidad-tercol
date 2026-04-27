@@ -1,68 +1,44 @@
-# Fix: cálculo de negociación falla con error 404 (42883)
+# Plan: Quitar sugerencias y fijar Andres Perez como usuario por defecto
 
-## Diagnóstico
+## 1. Quitar sugerencias para subir el margen
 
-Los logs de red muestran que TODAS las llamadas a `get_negotiation_realtime` están devolviendo:
+En `src/features/negociaciones/NegotiationCalculator.tsx`:
+- Eliminar el import de `SuggestionPanel` (línea 62).
+- Eliminar el import de `LiveSuggestion` del hook `useNegotiationLive` (línea 61).
+- Eliminar la función `addSuggestion` (líneas 203-221).
+- Eliminar el bloque que renderiza `<SuggestionPanel ... />` (líneas 545-546).
+- En la llamada a `useNegotiationLive` cambiar `topSuggestions: 6` a `topSuggestions: 0` para que el RPC no calcule sugerencias innecesariamente.
 
-```
-code: 42883
-message: function row_to_json(jsonb) does not exist
-```
+Dejaremos el archivo `SuggestionPanel.tsx` y los tipos `LiveSuggestion` en su lugar (sin uso) para poder reactivar la funcionalidad más adelante sin reescribirla. No se modifica la BD.
 
-Por eso no se calcula nada (ni en tiempo real ni al guardar): el RPC falla antes de devolver totales/filas/sugerencias.
+## 2. Andres Perez como usuario por defecto (eliminar "Sistema")
 
-### Causa raíz
+Cambiamos el modelo: ya no existe el estado "sin firma / Sistema". Andres Perez es la identidad por defecto y siempre hay un usuario activo.
 
-En el bloque de sugerencias del RPC actual, se hace:
+### `src/hooks/useCurrentUser.ts`
+- Definir una constante `DEFAULT_USER` con:
+  - `id: "13285c47-e1fa-43db-bd3d-2a74dda42bcf"`
+  - `name: "Andres Perez"`
+- `readFromStorage()` devuelve `DEFAULT_USER` cuando no hay nada en sessionStorage (ya no `null`).
+- `getCurrentUser()` deja de devolver `null`: tipo de retorno `TercolUser`.
+- `getCurrentUserForAudit()` devuelve siempre `{ id, name }` reales (nunca "Sistema").
+- `useCurrentUser`:
+  - El estado inicial sigue siendo `null` solo para evitar hydration mismatch durante el primer render del SSR; tras montar, siempre habrá un usuario.
+  - `clearUser()` ahora restablece a `DEFAULT_USER` (en lugar de `null`).
 
-```sql
-SELECT COALESCE(jsonb_agg(row_to_json(r)::jsonb ORDER BY ...), '[]'::jsonb)
-FROM (
-  SELECT jsonb_build_object(...) AS r   -- r ya es jsonb
-  FROM ranked
-  ...
-) s;
-```
+### `src/components/layout/UserSwitcher.tsx`
+- Quitar todas las menciones a "Sistema" / "Sin firma":
+  - El badge inferior siempre muestra el nombre real del usuario (sin fallback a "Sistema").
+  - Las iniciales se calculan siempre desde `displayUser.name` (con `DEFAULT_USER` como fallback durante SSR).
+  - Subtítulo: siempre "Firmando".
+- Reemplazar el botón "Cerrar identidad (volver a Sistema)" por "Restablecer a Andres Perez", llamando a `clearUser()` (que ahora vuelve al default).
+- Toast de `handleClear`: "Firmando como Andres Perez".
 
-`r` ya es de tipo `jsonb` (lo construye `jsonb_build_object`), pero `row_to_json()` solo acepta tipos record/row, no `jsonb`. Postgres no encuentra una sobrecarga válida y aborta la función entera.
+### `src/routes/_app.tsx`
+- En el header, `displayName` deja de tener fallback a "Sistema" — usa `user?.name ?? "Andres Perez"` para el primer render SSR.
 
-## Cambios
+No se requiere migración de base de datos. Andres Perez ya existe en `app_users` con `is_default = true`.
 
-### 1. Migración SQL: corregir `get_negotiation_realtime`
-
-Reemplazar el bloque de sugerencias para:
-- Eliminar `row_to_json(r)::jsonb` (innecesario porque `r` ya es jsonb).
-- Hacer `jsonb_agg(r ORDER BY (r->>'margenPct')::numeric DESC)` directamente sobre el jsonb construido.
-- Mantener intacto el resto de la lógica (filas, totales, factor operacional, filtro por margen mínimo, top N).
-
-Pseudocódigo de la corrección:
-
-```sql
-SELECT COALESCE(jsonb_agg(r ORDER BY (r->>'margenPct')::numeric DESC), '[]'::jsonb)
-INTO v_suggestions
-FROM (
-  SELECT jsonb_build_object(
-    'referencia', referencia,
-    'descripcion', descripcion,
-    'precio', precio,
-    'ctuProm', ctu_avg,
-    'margenPct', margen_pct
-  ) AS r
-  FROM ranked
-  WHERE margen_pct >= p_min_margin_pct
-  ORDER BY margen_pct DESC
-  LIMIT GREATEST(p_top_suggestions, 0)
-) s;
-```
-
-### 2. Verificación
-
-Después de aplicar la migración, recargar `/negociaciones`, abrir una negociación y comprobar:
-- El RPC devuelve 200 (no 404).
-- Los KPIs (Ventas netas, Costo total, Margen %) se calculan en tiempo real al cambiar cantidad/descuento.
-- Las sugerencias aparecen si hay candidatos sobre el margen mínimo.
-
-## Archivos afectados
-
-- Nueva migración SQL en `supabase/migrations/` que hace `CREATE OR REPLACE FUNCTION public.get_negotiation_realtime(...)` con el bloque de sugerencias corregido.
-- No se requieren cambios en el frontend.
+## Resultado
+- Las cards KPI ya no muestran panel de sugerencias debajo cuando estás bajo el margen mínimo.
+- Toda creación/edición queda firmada con Andres Perez por defecto, sin que aparezca jamás "Sistema" en la UI ni en las columnas de auditoría.

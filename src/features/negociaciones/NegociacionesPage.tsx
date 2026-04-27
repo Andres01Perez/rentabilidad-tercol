@@ -3,7 +3,7 @@ import { Briefcase, ArrowLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER } from "@/hooks/useCurrentUser";
 import {
   NEGOTIATIONS_KEY,
   negotiationsQueryOptions,
@@ -86,7 +86,7 @@ export function NegociacionesPage() {
             initialItems={[]}
             itemsLoading={false}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
             onCancel={handleBack}
@@ -98,7 +98,7 @@ export function NegociacionesPage() {
             initialItems={items ?? []}
             itemsLoading={itemsLoading}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
             onCancel={handleBack}

@@ -2,7 +2,7 @@ import * as React from "react";
 import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER } from "@/hooks/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -178,7 +178,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
         cantidad: r.cantidad,
         valor_total: r.valor_total,
         created_by_id: user?.id ?? null,
-        created_by_name: user?.name ?? "Sistema",
+        created_by_name: user?.name ?? DEFAULT_USER.name,
       }));
       await chunkedInsert(payload, 500, async (batch) => {
         const { error } = await supabase.from("sales").insert(batch);
@@ -221,7 +221,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   Se registrará como{" "}
-                  <span className="font-medium text-foreground">{user?.name ?? "Sistema"}</span>
+                  <span className="font-medium text-foreground">{user?.name ?? DEFAULT_USER.name}</span>
                   {!user && " (puedes firmar como un usuario en el menú lateral si quieres dejar tu nombre)."}
                 </p>
                 {warnings.length > 0 && (

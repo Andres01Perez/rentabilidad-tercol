@@ -3,7 +3,7 @@ import { Building2, Plus, Pencil, Loader2, Power } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,7 +165,7 @@ function AssignmentsTab() {
           centers={availableCenters}
           month={month}
           userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
+          userName={user?.name ?? DEFAULT_USER.name}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -436,7 +436,7 @@ function CentersTab() {
         <CenterDialog
           editing={editing}
           userId={user?.id ?? null}
-          userName={user?.name ?? "Sistema"}
+          userName={user?.name ?? DEFAULT_USER.name}
           onClose={() => {
             setCreating(false);
             setEditing(null);

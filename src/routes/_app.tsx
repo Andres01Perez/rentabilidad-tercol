@@ -2,7 +2,7 @@ import * as React from "react";
 import { createFileRoute, Outlet, useLocation, Link } from "@tanstack/react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER } from "@/hooks/useCurrentUser";
 import { ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -26,7 +26,7 @@ function AppLayout() {
   const location = useLocation();
 
   const currentLabel = ROUTE_LABELS[location.pathname] ?? "Tercol";
-  const displayName = user?.name ?? "Sistema";
+  const displayName = user?.name ?? DEFAULT_USER.name;
 
   return (
     <SidebarProvider>

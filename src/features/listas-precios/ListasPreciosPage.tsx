@@ -3,7 +3,7 @@ import { Tags, Plus, Eye, RefreshCw, Trash2, Loader2, Search } from "lucide-reac
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUser, DEFAULT_USER } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,7 +184,7 @@ export function ListasPreciosPage() {
               refresh();
             }}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
           />
         </React.Suspense>
       )}
@@ -199,7 +199,7 @@ export function ListasPreciosPage() {
               refresh();
             }}
             userId={user?.id ?? null}
-            userName={user?.name ?? "Sistema"}
+            userName={user?.name ?? DEFAULT_USER.name}
           />
         </React.Suspense>
       )}
