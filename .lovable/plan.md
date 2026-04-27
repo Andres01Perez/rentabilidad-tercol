@@ -1,73 +1,68 @@
-# El lag de 5–15 s es del preview de Lovable, no de tu app
 
-Antes de cambiar nada, necesito ser claro porque llevamos varios pasos sin acertar:
+# Optimización de Negociaciones, Calculadora y Análisis de ventas
 
-## Qué medí ahora mismo
+## Diagnóstico
 
-| Entorno | Vista | Tiempo a render |
-|---|---|---|
-| **Producción** (`rentabilidad-tercol.lovable.app`) | `/dashboard` | **2.07 s** (DOM Interactive), **2.06 s** (First Paint) |
-| **Preview Lovable** (`*.lovableproject.com`) | `/dashboard` | 3.4 s (DOM Interactive), 5.6 s (Full Load) |
+Las tres vistas comparten el mismo patrón que ya causaba lag en Costos / Listas antes del paso anterior:
 
-En producción la app ya carga rápido. **El lag de 5–15 s que estás viendo es el dev-server del preview de Lovable.** Lo confirma el detalle del network: el preview baja **138 chunks separados**, cada uno entre **800 ms y 1500 ms**, porque Vite los sirve uno a uno sin bundlear. Eso es normal en desarrollo y **no se arregla desde el código**.
+1. **Sin caché**: usan `useState + useEffect + supabase.from(...)` directo. Cada navegación re-fetchea desde cero, aunque acabes de venir de la misma vista hace 5 segundos.
+2. **Catálogos pesados cliente-side**: `useMonthCatalog` (Calculadora) pagina manualmente `product_costs` y `operational_costs` en lotes de 1000 hasta agotar la tabla — solo para sacar `DISTINCT period_month`. En tablas grandes son varias rondas de red al entrar a la vista.
+3. **N+1 en `useSourceOptions` (Calculadora)**: para cada lista de precios hace una query `count` aparte. Con 20 listas son 21 requests serializadas.
+4. **Análisis de ventas dispara 3 RPCs en cascada** (`get_sales_months`, `financial_discounts`, `get_sales_dashboard`) cada vez que se monta, sin caché.
+5. **Negociaciones** vuelve a pedir `negotiations` cada vez que entras y, dentro del editor, lista todas las `price_lists` de nuevo y hace lookups individuales `eq().eq().maybeSingle()` por referencia.
 
-Lo único que puede sentirse "lento" en la app real son dos cosas concretas, y ambas las puedo arreglar:
+El paso anterior dejó el `QueryClient` con `staleTime: 60s` montado, pero estas tres vistas no lo aprovechan: ninguna usa `useQuery`. Por eso siguen lentas mientras Listas / Costos ya van fluidas.
 
-## 1. Bug real: hydration mismatch en el selector de usuario (~200–400 ms extra por vista)
+## Cambios
 
-En el log del dev-server hay este error en cada navegación:
+### 1. Negociaciones (`src/features/negociaciones/`)
 
-```
-Hydration failed because the server rendered text didn't match the client.
-+ title="Andres Perez"
-- title="Sistema (sin firma)"
-+ AP
-- S
-```
+- **Crear `queries.ts`** con `queryOptions` para:
+  - `negotiationsQueryOptions()` — la lista (mismo `select` que hoy).
+  - `priceListsLightQueryOptions()` — `id, name` ordenado por nombre, compartido con el editor.
+  - `negotiationItemsQueryOptions(id)` — items de una negociación.
+- **`NegociacionesPage`**: reemplazar `useState/useEffect` por `useQuery(negotiationsQueryOptions())`. La mutación de delete invalida la queryKey.
+- **`NegotiationEditor`**: usar `useQuery(priceListsLightQueryOptions())` y `useQuery(negotiationItemsQueryOptions(id))` en vez de los dos `useEffect`.
+- **`useReferenceSearch`**: migrar a `useQuery` con `queryKey: ["ref-search", q]`, `enabled: q.length >= 2`, `staleTime: 5 min` (los catálogos de referencias casi no cambian, así repetir la misma búsqueda es instantáneo). Mantener el debounce de 250 ms.
 
-Causa: el SSR pinta "Sistema/S" porque no tiene `sessionStorage`, y el cliente lee el storage y pinta "Andres Perez/AP". React tira a la basura **todo el árbol del layout** (sidebar + header + main) y lo vuelve a construir. Eso es lo que sientes como un parpadeo y un retraso al entrar a cualquier vista.
+### 2. Calculadora (`src/features/calculadora/`)
 
-Fix: marcar el `UserSwitcher` como cliente puro con `suppressHydrationWarning` + render diferido en su contenido — es un cambio quirúrgico de un solo archivo, no toca nada más.
+- **Crear `queries.ts`** con `queryOptions` para todas las lecturas:
+  - `monthCatalogQueryOptions()` — usa el RPC ya existente `get_period_catalog()` en vez de paginar `product_costs` / `operational_costs` desde el cliente. Esto reemplaza decenas de requests por una sola.
+  - `sourceOptionsQueryOptions(kind)` — usa el RPC ya existente `get_source_options(p_kind)` en lugar del N+1 de `count`.
+  - `sourceItemsQueryOptions(kind, id)` — items de la fuente.
+  - `productCostsByMonthsQueryOptions(months)` — paginación, pero cacheada.
+  - `operationalByMonthsQueryOptions(months)` — igual.
+- **`CalculadoraPage`**: reemplazar todos los `useState/useEffect` de fetching por `useQuery`. El cálculo `computeRentabilidad` se queda en el cliente al pulsar "Calcular" (no es un cuello de botella y depende de la combinación elegida).
+- Las previews de "% por mes" y "productos por mes" se vuelven instantáneas tras el primer cálculo gracias al cache de 60 s.
 
-## 2. Sobre-ingeniería real que introdujimos en los pasos pasados
+### 3. Análisis de ventas (`src/features/analisis-ventas/`)
 
-Tienes razón en que esto se complicó. Te propongo **revertir el exceso** y dejar solo lo que sí ayuda:
+- **Refactorizar `useSalesAnalytics.ts`** para usar React Query internamente:
+  - `salesMonthsQueryOptions()` — RPC `get_sales_months`, `staleTime: 5 min`.
+  - `financialDiscountsQueryOptions()` — catálogo, `staleTime: 5 min`.
+  - `salesDashboardQueryOptions(args)` — RPC `get_sales_dashboard` con todos los filtros aplicados como queryKey.
+  - `salesDetailQueryOptions(args)` — RPC `get_sales_detail`.
+- El hook sigue exportando la misma forma (`{ loading, hasAnySales, kpis, … }`) para no tocar la página, solo cambia su implementación interna.
+- Se mantiene el debounce de 250 ms para `search` y los `useDeferredValue` ya existentes.
+- Beneficio principal: volver a Análisis de ventas con los mismos filtros muestra el dashboard al instante (cache hit), y cambiar de un mes a otro y volver al anterior también es instantáneo.
 
-### Lo que voy a SIMPLIFICAR (quitar)
+### 4. Detalle técnico común
 
-- **Borrar los `*.lazy.tsx`** de las páginas pequeñas (`dashboard`, `historial`, `configuraciones`, `listas-precios`, `costos-operacionales`, `costos-productos`, `calculadora`, `negociaciones`). El `autoCodeSplitting` de TanStack ya hace eso solo; los archivos manuales son ruido y duplican el bootstrap.
-- **Quitar `validateSearch` + `zodValidator` + `loaderDeps`** de `costos-operacionales` y `costos-productos`. El `month` vuelve a ser `useState` local. Cuando el usuario cambia de mes, se pide la data al cambiar — exactamente lo mismo que antes, con la mitad del código.
-- **Quitar `getRouteApi`** de las páginas (ya no hace falta sin search params).
-- **Quitar `useSuspenseQuery`** y los `loader` de las rutas — vuelvo a `useQuery` simple en el componente. El cache de TanStack Query (60 s) sigue ahí, así que no hay regresión de velocidad y se elimina toda la complejidad de "ensureQueryData en el loader".
+- Todas las queries comparten el `QueryClient` ya configurado en `src/lib/queryClient.ts` (`staleTime: 60s`, `refetchOnWindowFocus: false`).
+- Tras crear/editar/borrar se llama `queryClient.invalidateQueries({ queryKey: [...] })` en vez de re-fetch manual.
+- No se cambia la UI ni los flujos del usuario; es refactor interno.
+- No se tocan los routes (`src/routes/_app/*.tsx`): siguen montando el componente directamente, sin loaders ni `validateSearch` (mantenemos la simpleza del paso anterior).
 
-### Lo que voy a MANTENER (porque sí ayuda y no estorba)
+## Archivos afectados
 
-- **`QueryClient` con `staleTime: 60s`** — esto es lo único que de verdad evita refetches al volver a una vista. Cero costo en complejidad.
-- **`React.lazy` para `ImportWizardDialog` y `UploadVentasDialog`** — esos sí pesan ~80 KB de SheetJS y solo se necesitan al subir un Excel. Se queda.
-- **`defaultPreload: false`** — porque el preload-on-hover saturaba Supabase. Se queda.
-- **Estructura `/_app/*` con sidebar compartido** — es la forma "nativa" de TanStack Start, no es complejidad nuestra.
-
-### Lo que NO voy a tocar
-
-- `analisis-ventas` y `negociaciones`: son las páginas pesadas de verdad. La simplificación va para las páginas chiquitas que tú mencionaste.
+- Nuevos: `src/features/negociaciones/queries.ts`, `src/features/calculadora/queries.ts`.
+- Editados: `NegociacionesPage.tsx`, `NegotiationEditor.tsx`, `useReferenceSearch.ts`, `CalculadoraPage.tsx`, `useCalculadora.ts` (mantiene `computeRentabilidad`, quita los hooks de fetch), `useSalesAnalytics.ts`.
 
 ## Resultado esperado
 
-- **En producción**: igual de rápido que ahora (~2 s primer paint, navegación SPA instantánea entre vistas cacheadas).
-- **En el preview de Lovable**: el primer paint seguirá tardando 3–5 s porque es Vite-dev y eso no depende de nosotros, pero **desaparece el parpadeo y los ~400 ms del re-render por hydration**, y el código vuelve a ser legible.
-- **Líneas de código netas**: bajan ~150 líneas (los `.lazy.tsx`, los esquemas zod, los `getRouteApi`, los `loader`).
-
-## Aclaración importante
-
-No puedo hacer que el preview de Lovable cargue en menos de 1 s — eso no es código de la app, es cómo Vite sirve el desarrollo. La medida real de tu app es la versión publicada, y ya está en 2 s. Si después de aplicar este plan sientes que la versión publicada sigue lenta, ahí sí tengo más cosas que ajustar (preconnect a Supabase, prefetch de fuentes, etc.). Pero quería ser honesto antes de seguir agregando capas.
-
-## Archivos que tocaría
-
-- `src/components/layout/UserSwitcher.tsx` — fix hydration
-- `src/routes/_app/{dashboard,listas-precios,costos-operacionales,costos-productos,calculadora,negociaciones}.lazy.tsx` — eliminar
-- `src/routes/_app/{listas-precios,costos-operacionales,costos-productos}.tsx` — quitar `loader`, `validateSearch`, `loaderDeps`; dejar solo `head` + `component`
-- `src/features/listas-precios/ListasPreciosPage.tsx` — `useSuspenseQuery` → `useQuery`
-- `src/features/costos-operacionales/CostosOperacionalesPage.tsx` — `useSuspenseQuery` → `useQuery`, `month` vuelve a `useState`
-- `src/features/costos-productos/CostosProductosPage.tsx` — igual
-
-¿Avanzo con esto?
+- Primera carga de cada vista: similar a hoy (un round-trip de red).
+- Navegaciones siguientes dentro de 60 s: render inmediato desde caché, sin spinner.
+- Calculadora: el catálogo de meses pasa de varias rondas paginadas a 1 RPC; las opciones de "Lista de precios" pasan de 21 requests a 1.
+- Negociaciones: la búsqueda de referencias y la lista de precios del editor se cachean entre aperturas.
+- Análisis de ventas: cambiar filtros y volver a un combo previo es instantáneo.
