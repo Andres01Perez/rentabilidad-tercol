@@ -1,5 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Calculator,
   Loader2,
@@ -42,6 +44,10 @@ import {
   type OpMonthInfo,
   type SourceOption,
 } from "./useCalculadora";
+import {
+  operationalQueryOptions,
+  productCostsKey,
+} from "./queries";
 import { exportRentabilidadExcel } from "./exportExcel";
 
 function pickDefaultMonth(available: string[], preferred: string) {
@@ -99,6 +105,7 @@ export function CalculadoraPage() {
   const { costMonths: availCost, opMonths: availOp, loading: catalogLoading } =
     useMonthCatalog();
   const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
+  const queryClient = useQueryClient();
 
   // Paso 1
   const [sourceKind, setSourceKind] = React.useState<SourceKind>("price_list");
@@ -127,52 +134,32 @@ export function CalculadoraPage() {
     );
   }, [availOp, previousMonthDefault]);
 
-  // Estado preview operacional (carga asíncrona al cambiar selección)
-  const [opPreview, setOpPreview] = React.useState<OpMonthInfo[]>([]);
-  const [opPreviewLoading, setOpPreviewLoading] = React.useState(false);
-  React.useEffect(() => {
-    if (opMonthsSel.length === 0) {
-      setOpPreview([]);
-      return;
-    }
-    let cancelled = false;
-    setOpPreviewLoading(true);
-    void fetchOperationalByMonths(opMonthsSel).then((res) => {
-      if (!cancelled) {
-        setOpPreview(res.perMonth);
-        setOpPreviewLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [opMonthsSel]);
+  // Preview operacional con cache (60s). Se aprovecha también al pulsar
+  // "Calcular" porque el cache se reutiliza.
+  const { data: opPreviewData, isFetching: opPreviewLoading } = useQuery(
+    operationalQueryOptions(opMonthsSel),
+  );
+  const opPreview: OpMonthInfo[] = opPreviewData?.perMonth ?? [];
 
   const opAvgPreview =
     opPreview.length > 0
       ? opPreview.reduce((a, b) => a + b.totalPct, 0) / opPreview.length
       : 0;
 
-  // Preview costos (conteo por mes)
-  const [costPreview, setCostPreview] = React.useState<{ month: string; count: number }[]>([]);
-  React.useEffect(() => {
-    if (costMonthsSel.length === 0) {
-      setCostPreview([]);
-      return;
-    }
-    let cancelled = false;
-    void Promise.all(
-      costMonthsSel.map(async (m) => {
-        const res = await fetchProductCostsByMonths([m]);
-        return { month: m, count: res.avgByRef.size };
-      }),
-    ).then((arr) => {
-      if (!cancelled) setCostPreview(arr);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [costMonthsSel]);
+  // Preview de costos: una sola RPC que devuelve el conteo por mes.
+  // Antes hacíamos N requests (uno por mes) descargando filas completas.
+  const { data: costPreview = [] } = useQuery({
+    queryKey: ["calc", "cost-preview", costMonthsSel.slice().sort().join("|")],
+    enabled: costMonthsSel.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_cost_month_summary", {
+        p_months: costMonthsSel,
+      });
+      if (error) throw error;
+      const rows = (data as Array<{ month: string; product_count: number }>) ?? [];
+      return rows.map((r) => ({ month: String(r.month), count: Number(r.product_count) }));
+    },
+  });
 
   // Resultado
   const [calculating, setCalculating] = React.useState(false);
@@ -189,10 +176,21 @@ export function CalculadoraPage() {
     if (!option) return;
     setCalculating(true);
     try {
+      // Reutilizamos los datos cacheados por React Query cuando ya están
+      // frescos: si el usuario cambió de fuente pero los meses son iguales,
+      // no se vuelven a pedir costos ni operacionales.
       const [items, costs, op] = await Promise.all([
-        fetchSourceItems(sourceKind, sourceId),
-        fetchProductCostsByMonths(costMonthsSel),
-        fetchOperationalByMonths(opMonthsSel),
+        queryClient.fetchQuery({
+          queryKey: ["calc", "source-items", sourceKind, sourceId],
+          queryFn: () => fetchSourceItems(sourceKind, sourceId),
+        }),
+        queryClient.fetchQuery({
+          queryKey: productCostsKey(costMonthsSel),
+          queryFn: () => fetchProductCostsByMonths(costMonthsSel),
+        }),
+        queryClient.fetchQuery({
+          ...operationalQueryOptions(opMonthsSel),
+        }),
       ]);
       const rows = computeRentabilidad(items, costs, costMonthsSel, op.avgPct);
       setResult({
