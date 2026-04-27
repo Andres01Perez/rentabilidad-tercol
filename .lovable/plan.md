@@ -1,55 +1,68 @@
-## Problema detectado
+# Fix: cálculo de negociación falla con error 404 (42883)
 
-La razón por la que **nada se calcula** (ni en vivo ni al guardar las métricas derivadas) es un bug en la función SQL `get_negotiation_realtime` en Supabase. Devuelve error **400** en cada llamada:
+## Diagnóstico
+
+Los logs de red muestran que TODAS las llamadas a `get_negotiation_realtime` están devolviendo:
 
 ```
-column r.margen_pct does not exist
-hint: Perhaps you meant to reference the column "r.margenPct"
+code: 42883
+message: function row_to_json(jsonb) does not exist
 ```
 
-La función arma un subquery con alias en camelCase (`margenPct`, `ctuProm`) pero al final hace `ORDER BY r.margen_pct DESC` (snake_case), un nombre que no existe. Como el RPC siempre falla, el hook `useNegotiationLive` nunca recibe filas → KPIs en 0, márgenes vacíos, sin sugerencias.
+Por eso no se calcula nada (ni en tiempo real ni al guardar): el RPC falla antes de devolver totales/filas/sugerencias.
 
-## Cambios a aplicar
+### Causa raíz
 
-### 1. Migración SQL — corregir `get_negotiation_realtime`
+En el bloque de sugerencias del RPC actual, se hace:
 
-Reemplazar el `ORDER BY r.margen_pct DESC` por `ORDER BY r."margenPct" DESC` (camelCase entre comillas, que es como quedó aliasado en el subquery `r`). No se modifica ninguna otra lógica de la función.
-
-### 2. Sticky de la sección de KPIs en `NegotiationCalculator.tsx`
-
-Hacer que el bloque de tarjetas KPI (Ventas netas / Costo / Margen $ / Margen %) quede pegado al tope al hacer scroll, de modo que al añadir muchas referencias siempre se vean los totales.
-
-- Añadir `sticky top-2 z-30` (o `top-4`) al contenedor del bloque KPI.
-- Mantener `backdrop-blur` y borde para que se lea bien sobre la tabla que pasa por debajo.
-- Asegurar que la tabla de items (`z-0`) y el dropdown del buscador (`z-50`) sigan respetando el orden visual: buscador encima del KPI sticky.
-
-### Detalle técnico
-
-**SQL (migración):**
 ```sql
-CREATE OR REPLACE FUNCTION public.get_negotiation_realtime(...)
--- ... cuerpo igual ...
--- al final del bloque de sugerencias:
-SELECT referencia, descripcion, precio, ctu_avg AS "ctuProm",
-       margen_pct AS "margenPct"
-FROM ranked
-WHERE margen_pct >= p_min_margin_pct
-ORDER BY "margenPct" DESC   -- antes: ORDER BY margen_pct DESC ❌
-LIMIT GREATEST(p_top_suggestions, 0)
+SELECT COALESCE(jsonb_agg(row_to_json(r)::jsonb ORDER BY ...), '[]'::jsonb)
+FROM (
+  SELECT jsonb_build_object(...) AS r   -- r ya es jsonb
+  FROM ranked
+  ...
+) s;
 ```
 
-**JSX (KPIs sticky):**
-```tsx
-<div className={cn(
-  "glass sticky top-2 z-30 rounded-2xl border p-4 backdrop-blur-xl ...",
-  // estados belowMin / okMin / default
-)}>
-  {/* KPIs */}
-</div>
+`r` ya es de tipo `jsonb` (lo construye `jsonb_build_object`), pero `row_to_json()` solo acepta tipos record/row, no `jsonb`. Postgres no encuentra una sobrecarga válida y aborta la función entera.
+
+## Cambios
+
+### 1. Migración SQL: corregir `get_negotiation_realtime`
+
+Reemplazar el bloque de sugerencias para:
+- Eliminar `row_to_json(r)::jsonb` (innecesario porque `r` ya es jsonb).
+- Hacer `jsonb_agg(r ORDER BY (r->>'margenPct')::numeric DESC)` directamente sobre el jsonb construido.
+- Mantener intacto el resto de la lógica (filas, totales, factor operacional, filtro por margen mínimo, top N).
+
+Pseudocódigo de la corrección:
+
+```sql
+SELECT COALESCE(jsonb_agg(r ORDER BY (r->>'margenPct')::numeric DESC), '[]'::jsonb)
+INTO v_suggestions
+FROM (
+  SELECT jsonb_build_object(
+    'referencia', referencia,
+    'descripcion', descripcion,
+    'precio', precio,
+    'ctuProm', ctu_avg,
+    'margenPct', margen_pct
+  ) AS r
+  FROM ranked
+  WHERE margen_pct >= p_min_margin_pct
+  ORDER BY margen_pct DESC
+  LIMIT GREATEST(p_top_suggestions, 0)
+) s;
 ```
 
-Con la función SQL corregida, el RPC devolverá 200 y el hook poblará automáticamente: CTU prom, Margen U, Margen %, Subtotales, KPIs totales y panel de sugerencias. No se requieren cambios adicionales en el frontend para los cálculos.
+### 2. Verificación
+
+Después de aplicar la migración, recargar `/negociaciones`, abrir una negociación y comprobar:
+- El RPC devuelve 200 (no 404).
+- Los KPIs (Ventas netas, Costo total, Margen %) se calculan en tiempo real al cambiar cantidad/descuento.
+- Las sugerencias aparecen si hay candidatos sobre el margen mínimo.
 
 ## Archivos afectados
-- Nueva migración Supabase (corrección de `get_negotiation_realtime`)
-- `src/features/negociaciones/NegotiationCalculator.tsx` (sticky de KPIs)
+
+- Nueva migración SQL en `supabase/migrations/` que hace `CREATE OR REPLACE FUNCTION public.get_negotiation_realtime(...)` con el bloque de sugerencias corregido.
+- No se requieren cambios en el frontend.
