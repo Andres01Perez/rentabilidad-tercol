@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/period";
 import { cn } from "@/lib/utils";
-import type { NegotiationRow } from "./NegociacionesPage";
+import type { NegotiationRow } from "./queries";
 
 export function NegotiationsList({
   rows,
