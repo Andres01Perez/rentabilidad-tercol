@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CalculadoraPage } from "@/features/calculadora/CalculadoraPage";
 
 export const Route = createFileRoute("/_app/calculadora")({
   head: () => ({
@@ -11,4 +12,5 @@ export const Route = createFileRoute("/_app/calculadora")({
       },
     ],
   }),
+  component: CalculadoraPage,
 });

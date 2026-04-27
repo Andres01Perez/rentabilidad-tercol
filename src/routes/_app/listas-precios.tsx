@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { priceListsQueryOptions } from "@/features/listas-precios/queries";
+import { ListasPreciosPage } from "@/features/listas-precios/ListasPreciosPage";
 
 export const Route = createFileRoute("/_app/listas-precios")({
   head: () => ({
@@ -8,6 +8,5 @@ export const Route = createFileRoute("/_app/listas-precios")({
       { name: "description", content: "Gestión de listas de precios completas y precios unitarios por producto." },
     ],
   }),
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(priceListsQueryOptions()),
+  component: ListasPreciosPage,
 });

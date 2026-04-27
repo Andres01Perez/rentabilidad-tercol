@@ -24,6 +24,13 @@ interface UserSwitcherProps {
  */
 export function UserSwitcher({ collapsed }: UserSwitcherProps) {
   const { user, setUser, clearUser } = useCurrentUser();
+  // Evitamos hydration mismatch: el primer render (SSR + primer paint del
+  // cliente) muestra siempre "Sistema". Solo después de montar leemos la
+  // identidad real desde sessionStorage. Sin esto, React tira el árbol del
+  // layout y lo regenera (parpadeo + ~300 ms extra por vista).
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  const displayUser = mounted ? user : null;
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [users, setUsers] = React.useState<TercolUser[]>([]);
@@ -105,8 +112,8 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
     toast.success("Identidad cerrada · firmando como Sistema");
   };
 
-  const initials = user
-    ? user.name
+  const initials = displayUser
+    ? displayUser.name
         .split(" ")
         .map((p) => p[0])
         .slice(0, 2)
@@ -122,19 +129,26 @@ export function UserSwitcher({ collapsed }: UserSwitcherProps) {
             "flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-accent",
             collapsed && "justify-center",
           )}
-          title={user?.name ?? "Sistema (sin firma)"}
+          title={displayUser?.name ?? "Sistema (sin firma)"}
+          suppressHydrationWarning
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-xs font-bold text-white shadow-soft">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-xs font-bold text-white shadow-soft"
+            suppressHydrationWarning
+          >
             {initials}
           </div>
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">
-                  {user?.name ?? "Sistema"}
+                <p className="truncate text-sm font-semibold" suppressHydrationWarning>
+                  {displayUser?.name ?? "Sistema"}
                 </p>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {user ? "Firmando" : "Sin firma"}
+                <p
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground"
+                  suppressHydrationWarning
+                >
+                  {displayUser ? "Firmando" : "Sin firma"}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />

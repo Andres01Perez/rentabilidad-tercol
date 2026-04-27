@@ -1,8 +1,7 @@
 import * as React from "react";
 import { Building2, Plus, Pencil, Loader2, Power } from "lucide-react";
 import { toast } from "sonner";
-import { useNavigate, getRouteApi } from "@tanstack/react-router";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -34,7 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatMonth, previousMonth, formatPercent } from "@/lib/period";
+import { currentMonthDate, formatMonth, previousMonth, formatPercent } from "@/lib/period";
 import { cn } from "@/lib/utils";
 import {
   COST_CENTERS_KEY,
@@ -44,8 +43,6 @@ import {
   type AssignmentRow,
   type CostCenterRow,
 } from "./queries";
-
-const routeApi = getRouteApi("/_app/costos-operacionales");
 
 type CostCenter = CostCenterRow;
 type Assignment = AssignmentRow;
@@ -77,20 +74,10 @@ export function CostosOperacionalesPage() {
 
 function AssignmentsTab() {
   const { user } = useCurrentUser();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { month } = routeApi.useSearch();
-  const setMonth = React.useCallback(
-    (m: string) => {
-      void navigate({
-        to: "/costos-operacionales",
-        search: (prev: Record<string, unknown>) => ({ ...prev, month: m }),
-      });
-    },
-    [navigate],
-  );
-  const { data: centers } = useSuspenseQuery(costCentersQueryOptions());
-  const { data: assignments, isFetching: loading } = useSuspenseQuery(
+  const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
+  const { data: centers = [] } = useQuery(costCentersQueryOptions());
+  const { data: assignments = [], isFetching: loading } = useQuery(
     operationalCostsQueryOptions(month),
   );
   const refresh = React.useCallback(() => {
@@ -348,7 +335,7 @@ function AssignmentDialog({
 function CentersTab() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const { data: centers, isFetching: loading } = useSuspenseQuery(
+  const { data: centers = [], isFetching: loading } = useQuery(
     costCentersQueryOptions(),
   );
   const refresh = React.useCallback(() => {

@@ -1,161 +1,73 @@
-## Diagnóstico real
+# El lag de 5–15 s es del preview de Lovable, no de tu app
 
-Antes de arreglar, vale la pena ser honestos sobre por qué los cambios anteriores **no se sintieron** y en algunos casos empeoraron las cosas:
+Antes de cambiar nada, necesito ser claro porque llevamos varios pasos sin acertar:
 
-1. **`defaultPreload: "intent"` en realidad agregó carga**: cada vez que el usuario pasa el mouse por el sidebar dispara fetches a Supabase para 6 vistas. Eso explica por qué los selectores y tablas "se demoran el doble": están compitiendo con preloads paralelos contra Supabase desde el navegador.
-2. **No estamos usando TanStack Query** aunque está instalado. Cada `useEffect → setLoading(true) → supabase.from(...)` se vuelve a ejecutar **completo** cada vez que entras a la vista, sin cache real. El `staleTime` del router solo cachea el resultado del `loader`, pero como no usamos loaders, no cachea nada.
-3. **`MonthSelect` se vuelve a montar** y recalcula `lastNMonths(24)` en cada render del padre porque el padre se desmonta al navegar.
-4. **`ImportWizardDialog` se incluye en el chunk principal** de cada página (lee Excel con SheetJS, ~80 KiB). Eso es justo el "Reduce unused JavaScript: 78 KiB" que reporta Lighthouse — está adentro de `index-CplQSEAv.js`.
-5. **Cache HTTP en 0 segundos** para todos los assets de Lovable (Lighthouse: 250 KiB desperdiciados). Esto **no podemos arreglarlo desde código** — lo controla el CDN de Lovable. Lo dejamos documentado.
-6. **Render blocking de Google Fonts** (~280 ms): el CSS de Montserrat es bloqueante.
+## Qué medí ahora mismo
 
-## Cambios propuestos
+| Entorno | Vista | Tiempo a render |
+|---|---|---|
+| **Producción** (`rentabilidad-tercol.lovable.app`) | `/dashboard` | **2.07 s** (DOM Interactive), **2.06 s** (First Paint) |
+| **Preview Lovable** (`*.lovableproject.com`) | `/dashboard` | 3.4 s (DOM Interactive), 5.6 s (Full Load) |
 
-### Fase A — Frenar el preload masivo (1 archivo)
+En producción la app ya carga rápido. **El lag de 5–15 s que estás viendo es el dev-server del preview de Lovable.** Lo confirma el detalle del network: el preview baja **138 chunks separados**, cada uno entre **800 ms y 1500 ms**, porque Vite los sirve uno a uno sin bundlear. Eso es normal en desarrollo y **no se arregla desde el código**.
 
-**`src/router.tsx`**: cambiar `defaultPreload: "intent"` → `defaultPreload: false` y dejar solo `defaultPreloadStaleTime: 0`. La precarga por hover está saturando Supabase. Reemplazaremos esa "magia" por algo más confiable: TanStack Query con cache real.
+Lo único que puede sentirse "lento" en la app real son dos cosas concretas, y ambas las puedo arreglar:
 
-### Fase B — TanStack Query como capa de cache (3 vistas + setup)
+## 1. Bug real: hydration mismatch en el selector de usuario (~200–400 ms extra por vista)
 
-**Setup global** (una sola vez):
+En el log del dev-server hay este error en cada navegación:
 
-- Crear `src/lib/queryClient.ts` con un `QueryClient` configurado: `staleTime: 60_000`, `gcTime: 5 * 60_000`, `refetchOnWindowFocus: false`.
-- En `src/router.tsx` (factory `getRouter`): instanciar un `QueryClient` por request y pasarlo en `context`.
-- En `src/routes/__root.tsx`: añadir tipo de contexto `{ queryClient }` y envolver `<Outlet />` con `<QueryClientProvider>`.
-
-**Refactor de las 3 vistas — patrón uniforme**:
-
-Para cada feature creamos un archivo de queries y migramos la página:
-
-#### B.1 — `listas-precios`
-
-- Nuevo `src/features/listas-precios/queries.ts`:
-  - `priceListsQueryOptions()` → reemplaza `loadLists`.
-  - `priceListItemsQueryOptions(listId)` → reemplaza el `useEffect` del `ItemsSheet`.
-- En `routes/_app/listas-precios.tsx`: añadir `loader: ({ context }) => context.queryClient.ensureQueryData(priceListsQueryOptions())`.
-- En `ListasPreciosPage.tsx`:
-  - Cambiar `useState + useEffect + loadLists` por `useSuspenseQuery(priceListsQueryOptions())`.
-  - Después de mutaciones (delete, replace, create) → `queryClient.invalidateQueries(['price-lists'])` en lugar de re-llamar a `loadLists`.
-- Resultado esperado: la primera carga sigue tardando lo que tarde Supabase, pero al volver a la vista en menos de 60s es **instantánea** (cache) y no flickerea.
-
-#### B.2 — `costos-operacionales`
-
-- Nuevo `src/features/costos-operacionales/queries.ts`:
-  - `costCentersQueryOptions()` (compartida entre las dos pestañas).
-  - `operationalCostsQueryOptions(month)`.
-  - `previousMonthSuggestionQueryOptions(centerId, month)` para el sugeridor.
-- En `routes/_app/costos-operacionales.tsx`: `validateSearch` con `{ month?: string }` (zod), `loaderDeps: ({ search }) => ({ month: search.month })`, y precargar `ensureQueryData` para los centros + asignaciones.
-- En `CostosOperacionalesPage`: el `month` deja de vivir en `useState` y pasa a `Route.useSearch()` + `useNavigate({ search })`. Esto permite que **al cambiar de mes la URL refleje el filtro** y que volver atrás restaure el estado.
-- `AssignmentsTab` y `CentersTab` usan `useSuspenseQuery` y `useMutation` con `invalidateQueries` después de guardar.
-
-#### B.3 — `costos-productos`
-
-- Nuevo `src/features/costos-productos/queries.ts`:
-  - `productCostsQueryOptions(month)`.
-- Mismo patrón: `validateSearch` con `month`, `loader` con `ensureQueryData`, `useSuspenseQuery` en el componente.
-- Mantener el filtro de búsqueda (`search`) como `useState` local — no necesita estar en URL y se aplica sobre data ya cacheada.
-
-### Fase C — Code-splitting de pesos muertos (3 archivos)
-
-El `ImportWizardDialog` carga SheetJS (~80 KiB) y solo se usa cuando el usuario abre el modal de importar. Hoy va en el chunk principal de cada página.
-
-- En `ListasPreciosPage.tsx` y `CostosProductosPage.tsx`: `const ImportWizardDialog = React.lazy(() => import("@/components/excel/ImportWizardDialog").then(m => ({ default: m.ImportWizardDialog })))` y envolver en `<Suspense fallback={null}>`.
-- En `CostosOperacionalesPage.tsx`: lazy del `AssignmentDialog` y `CenterDialog` (más livianos pero igual reducen el bundle inicial).
-
-Esto debería bajar `index-CplQSEAv.js` de ~158 KiB a ~80 KiB y atacar directamente el "Reduce unused JavaScript: 78 KiB" del informe.
-
-### Fase D — Render blocking de fuentes (1 archivo)
-
-En `src/routes/__root.tsx`: cambiar la carga de Montserrat a no-bloqueante:
-
-```tsx
-{ rel: "preload", href: "...montserrat...", as: "style" },
-{ rel: "stylesheet", href: "...montserrat...", media: "print", onLoad: "this.media='all'" }
+```
+Hydration failed because the server rendered text didn't match the client.
++ title="Andres Perez"
+- title="Sistema (sin firma)"
++ AP
+- S
 ```
 
-Como TanStack head no soporta `onLoad` en links, alternativa: inyectar el `<link>` desde un componente cliente con `useEffect` o aceptar la pérdida y solo mantener el `preconnect` (que ya existe). **Opción recomendada**: dejar Montserrat solo en `font-display: swap` (ya está) y aceptar los 80 ms — no vale la pena complejidad.
+Causa: el SSR pinta "Sistema/S" porque no tiene `sessionStorage`, y el cliente lee el storage y pinta "Andres Perez/AP". React tira a la basura **todo el árbol del layout** (sidebar + header + main) y lo vuelve a construir. Eso es lo que sientes como un parpadeo y un retraso al entrar a cualquier vista.
 
-### Fase E — Cache HTTP de assets (no requiere código)
+Fix: marcar el `UserSwitcher` como cliente puro con `suppressHydrationWarning` + render diferido en su contenido — es un cambio quirúrgico de un solo archivo, no toca nada más.
 
-El reporte muestra `Cache-Control: 0` en todos los `.js` y `.css` del dominio Lovable. Esto lo controla el CDN de Lovable, no el repo. No es accionable desde el código de la app. Lo documentamos en el plan y avisamos.
+## 2. Sobre-ingeniería real que introdujimos en los pasos pasados
 
-## Detalles técnicos clave
+Tienes razón en que esto se complicó. Te propongo **revertir el exceso** y dejar solo lo que sí ayuda:
 
-```ts
-// src/lib/queryClient.ts
-export function makeQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60_000,
-        gcTime: 5 * 60_000,
-        refetchOnWindowFocus: false,
-        retry: 1,
-      },
-    },
-  });
-}
-```
+### Lo que voy a SIMPLIFICAR (quitar)
 
-```ts
-// src/features/listas-precios/queries.ts
-export const priceListsQueryOptions = () =>
-  queryOptions({
-    queryKey: ["price-lists"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("price_lists")
-        .select("id, name, created_by_name, created_at, updated_at, updated_by_name, price_list_items(count)")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data.map(/* ... */);
-    },
-  });
-```
+- **Borrar los `*.lazy.tsx`** de las páginas pequeñas (`dashboard`, `historial`, `configuraciones`, `listas-precios`, `costos-operacionales`, `costos-productos`, `calculadora`, `negociaciones`). El `autoCodeSplitting` de TanStack ya hace eso solo; los archivos manuales son ruido y duplican el bootstrap.
+- **Quitar `validateSearch` + `zodValidator` + `loaderDeps`** de `costos-operacionales` y `costos-productos`. El `month` vuelve a ser `useState` local. Cuando el usuario cambia de mes, se pide la data al cambiar — exactamente lo mismo que antes, con la mitad del código.
+- **Quitar `getRouteApi`** de las páginas (ya no hace falta sin search params).
+- **Quitar `useSuspenseQuery`** y los `loader` de las rutas — vuelvo a `useQuery` simple en el componente. El cache de TanStack Query (60 s) sigue ahí, así que no hay regresión de velocidad y se elimina toda la complejidad de "ensureQueryData en el loader".
 
-```tsx
-// routes/_app/costos-productos.tsx
-const searchSchema = z.object({
-  month: fallback(z.string(), defaultMonth()).default(defaultMonth()),
-});
+### Lo que voy a MANTENER (porque sí ayuda y no estorba)
 
-export const Route = createFileRoute("/_app/costos-productos")({
-  validateSearch: zodValidator(searchSchema),
-  loaderDeps: ({ search }) => ({ month: search.month }),
-  loader: ({ context, deps }) =>
-    context.queryClient.ensureQueryData(productCostsQueryOptions(deps.month)),
-  /* head ... */
-});
-```
+- **`QueryClient` con `staleTime: 60s`** — esto es lo único que de verdad evita refetches al volver a una vista. Cero costo en complejidad.
+- **`React.lazy` para `ImportWizardDialog` y `UploadVentasDialog`** — esos sí pesan ~80 KB de SheetJS y solo se necesitan al subir un Excel. Se queda.
+- **`defaultPreload: false`** — porque el preload-on-hover saturaba Supabase. Se queda.
+- **Estructura `/_app/*` con sidebar compartido** — es la forma "nativa" de TanStack Start, no es complejidad nuestra.
 
-## Archivos afectados
+### Lo que NO voy a tocar
 
-Modificados:
-- `src/router.tsx` (preload off + queryClient en context)
-- `src/routes/__root.tsx` (QueryClientProvider + tipo context)
-- `src/routes/_app/listas-precios.tsx` (loader)
-- `src/routes/_app/costos-operacionales.tsx` (validateSearch + loader)
-- `src/routes/_app/costos-productos.tsx` (validateSearch + loader)
-- `src/features/listas-precios/ListasPreciosPage.tsx` (Query + lazy dialogs)
-- `src/features/costos-operacionales/CostosOperacionalesPage.tsx` (Query + URL state + lazy dialogs)
-- `src/features/costos-productos/CostosProductosPage.tsx` (Query + URL state + lazy dialog)
-
-Creados:
-- `src/lib/queryClient.ts`
-- `src/features/listas-precios/queries.ts`
-- `src/features/costos-operacionales/queries.ts`
-- `src/features/costos-productos/queries.ts`
-
-## Lo que NO está en este plan
-
-- `analisis-ventas`, `negociaciones`, `calculadora`, `dashboard`: las dejaremos para una segunda iteración una vez validemos que estas 3 mejoraron.
-- Cache HTTP del CDN: fuera de nuestro control.
-- Reescribir `MonthSelect` para que no recalcule meses: ya está memoizado, no es el problema.
+- `analisis-ventas` y `negociaciones`: son las páginas pesadas de verdad. La simplificación va para las páginas chiquitas que tú mencionaste.
 
 ## Resultado esperado
 
-- **Primera entrada a una vista**: igual de rápido que hoy (depende de Supabase) pero **sin** competir con preloads paralelos.
-- **Segunda entrada en menos de 60s**: instantánea (cache de Query, sin spinner).
-- **Cambio de mes**: se siente como filtrar — la vista anterior queda visible y solo cambian los datos cuando llegan.
-- **Bundle inicial de cada vista**: ~50% más pequeño (sin el dialog de Excel).
-- **Lighthouse "Reduce unused JS"**: debería desaparecer o bajar a <10 KiB.
+- **En producción**: igual de rápido que ahora (~2 s primer paint, navegación SPA instantánea entre vistas cacheadas).
+- **En el preview de Lovable**: el primer paint seguirá tardando 3–5 s porque es Vite-dev y eso no depende de nosotros, pero **desaparece el parpadeo y los ~400 ms del re-render por hydration**, y el código vuelve a ser legible.
+- **Líneas de código netas**: bajan ~150 líneas (los `.lazy.tsx`, los esquemas zod, los `getRouteApi`, los `loader`).
+
+## Aclaración importante
+
+No puedo hacer que el preview de Lovable cargue en menos de 1 s — eso no es código de la app, es cómo Vite sirve el desarrollo. La medida real de tu app es la versión publicada, y ya está en 2 s. Si después de aplicar este plan sientes que la versión publicada sigue lenta, ahí sí tengo más cosas que ajustar (preconnect a Supabase, prefetch de fuentes, etc.). Pero quería ser honesto antes de seguir agregando capas.
+
+## Archivos que tocaría
+
+- `src/components/layout/UserSwitcher.tsx` — fix hydration
+- `src/routes/_app/{dashboard,listas-precios,costos-operacionales,costos-productos,calculadora,negociaciones}.lazy.tsx` — eliminar
+- `src/routes/_app/{listas-precios,costos-operacionales,costos-productos}.tsx` — quitar `loader`, `validateSearch`, `loaderDeps`; dejar solo `head` + `component`
+- `src/features/listas-precios/ListasPreciosPage.tsx` — `useSuspenseQuery` → `useQuery`
+- `src/features/costos-operacionales/CostosOperacionalesPage.tsx` — `useSuspenseQuery` → `useQuery`, `month` vuelve a `useState`
+- `src/features/costos-productos/CostosProductosPage.tsx` — igual
+
+¿Avanzo con esto?
