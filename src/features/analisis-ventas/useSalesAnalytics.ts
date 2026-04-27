@@ -82,7 +82,7 @@ export interface DashboardData {
 
 export interface UseSalesAnalyticsArgs {
   salesMonth: string;
-  costPeriodMonth: string;
+  costPeriodMonths: string[];
   opPeriodMonth: string;
   financialDiscountPct: number;
   filters: {
@@ -113,9 +113,9 @@ const EMPTY_DATA: DashboardData = {
   hasAnySales: false,
 };
 
-function toCostMonthDate(salesMonth: string): string {
-  // 'YYYY-MM-01' ya es el formato correcto.
-  return salesMonth;
+function normalizeCostMonths(months: string[]): string[] {
+  // Eliminamos duplicados y ordenamos para que la queryKey sea estable.
+  return Array.from(new Set(months)).sort();
 }
 
 // =====================================================================
@@ -153,16 +153,18 @@ const financialDiscountsQueryOptions = () => ({
 });
 
 const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
-  const { salesMonth, costPeriodMonth, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
+  const { salesMonth, costPeriodMonths, opPeriodMonth, financialDiscountPct, filters, refreshKey } = args;
   const vKey = filters.vendedores.join("|");
   const dKey = filters.dependencias.join("|");
   const tKey = filters.terceros.join("|");
+  const costMonthsNorm = normalizeCostMonths(costPeriodMonths);
+  const cKey = costMonthsNorm.join("|");
   return {
     queryKey: [
       "sales-analytics",
       "dashboard",
       salesMonth,
-      costPeriodMonth,
+      cKey,
       opPeriodMonth,
       financialDiscountPct,
       vKey,
@@ -173,8 +175,8 @@ const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
     queryFn: async (): Promise<DashboardData> => {
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
         p_sales_month: salesMonth,
-        p_cost_month: toCostMonthDate(costPeriodMonth),
-        p_op_month: toCostMonthDate(opPeriodMonth),
+        p_cost_months: costMonthsNorm,
+        p_op_month: opPeriodMonth,
         p_financial_pct: financialDiscountPct,
         p_vendedores: vKey ? vKey.split("|") : undefined,
         p_dependencias: dKey ? dKey.split("|") : undefined,
