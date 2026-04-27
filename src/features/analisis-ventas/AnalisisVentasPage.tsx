@@ -874,9 +874,16 @@ export function AnalisisVentasPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Mes de costos
+                  Meses de costos
                 </span>
-                <MonthSelect value={draftCostPeriod} onValueChange={setDraftCostPeriod} className="w-40" />
+                <div className="w-56">
+                  <MultiMonthPicker
+                    available={analytics.salesMonths.length > 0 ? analytics.salesMonths : [previousMonthDefault]}
+                    selected={draftCostPeriods}
+                    onChange={setDraftCostPeriods}
+                    emptyLabel="Selecciona mes(es)"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1026,7 +1033,13 @@ export function AnalisisVentasPage() {
               icon={ShoppingCart}
               label="Costo total"
               value={formatCurrency(analytics.kpis.costo)}
-              hint={`CTU mes ${applied.costPeriod.slice(0, 7)}`}
+              hint={
+                applied.costPeriods.length === 0
+                  ? "Sin meses de costo"
+                  : applied.costPeriods.length === 1
+                    ? `CTU mes ${applied.costPeriods[0].slice(0, 7)}`
+                    : `CTU promedio (${applied.costPeriods.length} meses)`
+              }
             />
             <KpiCard
               icon={Landmark}
