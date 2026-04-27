@@ -40,6 +40,7 @@ const COLUMN_MAP = {
   dependencia: ["dependencia"],
   tercero: ["tercero", "cliente"],
   referencia: ["productoc", "producto c", "producto", "ref", "referencia"],
+  grupo: ["grupo", "group"],
   valor_total: ["valor", "valor total", "total"],
   cantidad: ["cantidad", "cant"],
 } as const;
@@ -54,6 +55,7 @@ interface ParsedRow {
   dependencia: string | null;
   tercero: string | null;
   referencia: string;
+  grupo: string | null;
   cantidad: number;
   valor_total: number;
   sale_date: string;
@@ -124,6 +126,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
             dependencia: (r.dependencia as string | null) ?? null,
             tercero: (r.tercero as string | null) ?? null,
             referencia: String(r.referencia ?? "").trim(),
+            grupo: (r.grupo as string | null) ?? null,
             cantidad: cant,
             valor_total: val,
           });
@@ -171,6 +174,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
         dependencia: r.dependencia,
         tercero: r.tercero,
         referencia: r.referencia,
+        grupo: r.grupo,
         cantidad: r.cantidad,
         valor_total: r.valor_total,
         created_by_id: user?.id ?? null,
@@ -234,6 +238,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
                           <th className="px-2 py-1 text-left">Vendedor</th>
                           <th className="px-2 py-1 text-left">Tercero</th>
                           <th className="px-2 py-1 text-left">Ref</th>
+                          <th className="px-2 py-1 text-left">Grupo</th>
                           <th className="px-2 py-1 text-right">Cant</th>
                           <th className="px-2 py-1 text-right">Valor</th>
                         </tr>
@@ -245,6 +250,7 @@ export function UploadVentasDialog({ open, onOpenChange, onUploaded }: UploadVen
                             <td className="px-2 py-1 truncate max-w-[120px]">{r.vendedor ?? "—"}</td>
                             <td className="px-2 py-1 truncate max-w-[120px]">{r.tercero ?? "—"}</td>
                             <td className="px-2 py-1">{r.referencia}</td>
+                            <td className="px-2 py-1 truncate max-w-[140px]">{r.grupo ?? "—"}</td>
                             <td className="px-2 py-1 text-right">{formatNumber(r.cantidad)}</td>
                             <td className="px-2 py-1 text-right">{formatNumber(r.valor_total)}</td>
                           </tr>
