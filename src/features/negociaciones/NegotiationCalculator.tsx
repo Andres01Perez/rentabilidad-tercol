@@ -546,9 +546,20 @@ export function NegotiationCalculator({
 
       {/* Search */}
       <div className="glass relative z-40 rounded-2xl border border-border/60 p-4">
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Añadir referencia
-        </label>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Añadir referencia
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            className="gap-1.5"
+          >
+            <Upload className="h-3.5 w-3.5" /> Importar items
+          </Button>
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
