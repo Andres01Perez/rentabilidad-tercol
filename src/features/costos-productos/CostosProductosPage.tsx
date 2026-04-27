@@ -2,7 +2,7 @@ import * as React from "react";
 import { Package, Upload, Loader2, Search, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -140,7 +140,7 @@ const SECTIONS: Section[] = [
 ];
 
 export function CostosProductosPage() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [month, setMonth] = React.useState(() => previousMonth(currentMonthDate()));
   const [rows, setRows] = React.useState<ProductCost[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -334,7 +334,7 @@ export function CostosProductosPage() {
         </div>
       </div>
 
-      {uploadOpen && user && (
+      {uploadOpen && (
         <CostosUploadWizard
           defaultMonth={month}
           onClose={() => setUploadOpen(false)}
@@ -343,8 +343,8 @@ export function CostosProductosPage() {
             setMonth(m);
             void load();
           }}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
         />
       )}
     </div>
@@ -361,7 +361,7 @@ function CostosUploadWizard({
   defaultMonth: string;
   onClose: () => void;
   onDone: (month: string) => void;
-  userId: string;
+  userId: string | null;
   userName: string;
 }) {
   const [month, setMonth] = React.useState(defaultMonth);

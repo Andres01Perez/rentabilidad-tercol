@@ -2,7 +2,7 @@ import * as React from "react";
 import { Briefcase, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,7 +41,7 @@ export type NegotiationRow = {
 };
 
 export function NegociacionesPage() {
-  const { user } = useAuth();
+  const { user } = useCurrentUser();
   const [rows, setRows] = React.useState<NegotiationRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [editing, setEditing] = React.useState<NegotiationRow | null>(null);
@@ -98,7 +98,6 @@ export function NegociacionesPage() {
           <Button
             onClick={() => setCreating(true)}
             className="bg-gradient-brand text-white shadow-elegant"
-            disabled={!user}
           >
             <Plus className="mr-1 h-4 w-4" />
             Nueva negociación
@@ -182,11 +181,11 @@ export function NegociacionesPage() {
         </Table>
       </div>
 
-      {(creating || editing) && user && (
+      {(creating || editing) && (
         <NegotiationEditor
           negotiation={editing}
-          userId={user.id}
-          userName={user.name}
+          userId={user?.id ?? null}
+          userName={user?.name ?? "Sistema"}
           onClose={() => {
             setCreating(false);
             setEditing(null);
