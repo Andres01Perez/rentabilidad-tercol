@@ -543,6 +543,7 @@ export function NegotiationCalculator({
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Search */}
