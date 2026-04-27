@@ -458,6 +458,7 @@ export type Database = {
           created_by_name: string
           day: number
           dependencia: string | null
+          grupo: string | null
           id: string
           month: number
           precio_unitario: number | null
@@ -475,6 +476,7 @@ export type Database = {
           created_by_name: string
           day: number
           dependencia?: string | null
+          grupo?: string | null
           id?: string
           month: number
           precio_unitario?: number | null
@@ -492,6 +494,7 @@ export type Database = {
           created_by_name?: string
           day?: number
           dependencia?: string | null
+          grupo?: string | null
           id?: string
           month?: number
           precio_unitario?: number | null
