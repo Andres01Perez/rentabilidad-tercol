@@ -722,19 +722,19 @@ export function AnalisisVentasPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <MultiSelectFilter
                     label="Vendedor"
-                    options={analytics.uniques.vendedores}
+                    options={vendedoresOptions}
                     selected={draftVendedoresF}
                     onChange={setDraftVendedoresF}
                   />
                   <MultiSelectFilter
                     label="Dependencia"
-                    options={analytics.uniques.dependencias}
+                    options={dependenciasOptions}
                     selected={draftDependenciasF}
                     onChange={setDraftDependenciasF}
                   />
                   <MultiSelectFilter
                     label="Tercero"
-                    options={analytics.uniques.terceros}
+                    options={tercerosOptions}
                     selected={draftTercerosF}
                     onChange={setDraftTercerosF}
                   />
