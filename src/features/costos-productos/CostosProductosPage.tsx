@@ -137,7 +137,7 @@ const SECTIONS: Section[] = [
 
 export function CostosProductosPage() {
   const { user } = useCurrentUser();
-  const navigate = useNavigate({ from: "/_app/costos-productos" });
+  const navigate = useNavigate({ from: "/costos-productos" });
   const queryClient = useQueryClient();
   const { month } = routeApi.useSearch();
   const setMonth = React.useCallback(
