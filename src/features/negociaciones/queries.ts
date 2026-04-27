@@ -33,13 +33,15 @@ export const negotiationsQueryOptions = () =>
       const { data, error } = await supabase
         .from("negotiations")
         .select(
-          "id, name, notes, total, items_count, source_price_list_id, created_by_name, updated_by_name, created_at, updated_at",
+          "id, name, notes, total, items_count, source_price_list_id, cost_months, min_margin_pct, created_by_name, updated_by_name, created_at, updated_at",
         )
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((r) => ({
         ...r,
         total: Number(r.total),
+        cost_months: ((r as { cost_months?: string[] | null }).cost_months ?? []).map(String),
+        min_margin_pct: Number((r as { min_margin_pct?: number | null }).min_margin_pct ?? 36),
       })) as NegotiationRow[];
     },
   });
