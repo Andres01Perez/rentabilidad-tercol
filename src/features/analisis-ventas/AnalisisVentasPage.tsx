@@ -30,6 +30,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MonthSelect } from "@/components/period/MonthSelect";
+import { MultiMonthPicker } from "@/features/calculadora/MultiMonthPicker";
 import {
   Select,
   SelectContent,
@@ -627,7 +628,7 @@ export function AnalisisVentasPage() {
   const previousMonthDefault = React.useMemo(() => previousMonth(currentMonthDate()), []);
   // Estado borrador (lo que el usuario edita en la barra de filtros)
   const [draftSalesMonth, setDraftSalesMonth] = React.useState<string>(previousMonthDefault);
-  const [draftCostPeriod, setDraftCostPeriod] = React.useState<string>(previousMonthDefault);
+  const [draftCostPeriods, setDraftCostPeriods] = React.useState<string[]>([previousMonthDefault]);
   const [draftOpPeriod, setDraftOpPeriod] = React.useState<string>(previousMonthDefault);
   const [draftVendedoresF, setDraftVendedoresF] = React.useState<string[]>([]);
   const [draftDependenciasF, setDraftDependenciasF] = React.useState<string[]>([]);
@@ -636,7 +637,7 @@ export function AnalisisVentasPage() {
   // Estado aplicado (lo que efectivamente se envía a las RPCs)
   const [applied, setApplied] = React.useState({
     salesMonth: previousMonthDefault,
-    costPeriod: previousMonthDefault,
+    costPeriods: [previousMonthDefault] as string[],
     opPeriod: previousMonthDefault,
     financialDiscountPct: 2.5,
     vendedores: [] as string[],
@@ -664,7 +665,7 @@ export function AnalisisVentasPage() {
 
   const analytics = useSalesAnalytics({
     salesMonth: applied.salesMonth,
-    costPeriodMonth: applied.costPeriod,
+    costPeriodMonths: applied.costPeriods,
     opPeriodMonth: applied.opPeriod,
     financialDiscountPct: applied.financialDiscountPct,
     filters: appliedFilters,
@@ -673,7 +674,7 @@ export function AnalisisVentasPage() {
 
   const detail = useSalesDetail({
     salesMonth: applied.salesMonth,
-    costPeriodMonth: applied.costPeriod,
+    costPeriodMonths: applied.costPeriods,
     financialDiscountPct: applied.financialDiscountPct,
     filters: appliedFilters,
     search: deferredSearch,
@@ -686,7 +687,7 @@ export function AnalisisVentasPage() {
 
   const grouped = useSalesByGroup({
     salesMonth: applied.salesMonth,
-    costPeriodMonth: applied.costPeriod,
+    costPeriodMonths: applied.costPeriods,
     financialDiscountPct: applied.financialDiscountPct,
     filters: appliedFilters,
     search: deferredSearch,
@@ -782,7 +783,7 @@ export function AnalisisVentasPage() {
   };
   const hasPendingChanges =
     draftSalesMonth !== applied.salesMonth ||
-    draftCostPeriod !== applied.costPeriod ||
+    !arraysEqual(draftCostPeriods, applied.costPeriods) ||
     draftOpPeriod !== applied.opPeriod ||
     Math.abs(draftFinancialDiscountPct - applied.financialDiscountPct) > 0.0001 ||
     !arraysEqual(draftVendedoresF, applied.vendedores) ||
@@ -792,7 +793,7 @@ export function AnalisisVentasPage() {
   const handleApply = React.useCallback(() => {
     setApplied({
       salesMonth: draftSalesMonth,
-      costPeriod: draftCostPeriod,
+      costPeriods: draftCostPeriods,
       opPeriod: draftOpPeriod,
       financialDiscountPct: draftFinancialDiscountPct,
       vendedores: draftVendedoresF,
@@ -801,7 +802,7 @@ export function AnalisisVentasPage() {
     });
   }, [
     draftSalesMonth,
-    draftCostPeriod,
+    draftCostPeriods,
     draftOpPeriod,
     draftFinancialDiscountPct,
     draftVendedoresF,
@@ -811,7 +812,7 @@ export function AnalisisVentasPage() {
 
   const handleDiscard = React.useCallback(() => {
     setDraftSalesMonth(applied.salesMonth);
-    setDraftCostPeriod(applied.costPeriod);
+    setDraftCostPeriods(applied.costPeriods);
     setDraftOpPeriod(applied.opPeriod);
     setDraftFinancialDiscountPct(applied.financialDiscountPct);
     setDraftVendedoresF(applied.vendedores);
