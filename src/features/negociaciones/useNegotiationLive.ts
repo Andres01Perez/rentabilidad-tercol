@@ -163,7 +163,7 @@ export function useNegotiationLive(args: {
         p_op_months: opMonths,
         p_min_margin_pct: minMarginPct,
         p_top_suggestions: topSuggestions,
-        p_source_price_list_id: sourcePriceListId,
+        p_source_price_list_id: sourcePriceListId ?? undefined,
       });
       if (error) throw error;
       const j = (data ?? {}) as {
