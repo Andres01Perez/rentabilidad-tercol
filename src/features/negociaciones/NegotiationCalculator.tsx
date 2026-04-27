@@ -12,6 +12,7 @@ import {
   PiggyBank,
   Percent,
   Calendar,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,6 +52,7 @@ import { formatCurrency, formatPercent, currentMonthDate, previousMonth } from "
 import { chunkedInsert } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 import { useReferenceSearch } from "./useReferenceSearch";
+import { ImportItemsDialog, type ImportedItem } from "./ImportItemsDialog";
 import {
   NEGOTIATIONS_KEY,
   negotiationItemsKey,
@@ -159,6 +161,7 @@ export function NegotiationCalculator({
   // Search state
   const [query, setQuery] = React.useState("");
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
   const { results, loading: searching } = useReferenceSearch(query);
 
   const lookupPriceFromList = async (
@@ -205,6 +208,27 @@ export function NegotiationCalculator({
 
   const removeItem = (uid: string) => {
     setItems((prev) => prev.filter((i) => i.uid !== uid));
+  };
+
+  const handleImport = async (imported: ImportedItem[]) => {
+    // Resolve description + suggested price from price list (if any) per reference.
+    const newItems: EditorItem[] = [];
+    for (const it of imported) {
+      let suggested: number | null = null;
+      if (sourceListId) {
+        suggested = await lookupPriceFromList(it.referencia, sourceListId);
+      }
+      newItems.push({
+        uid: makeUid(),
+        referencia: it.referencia,
+        descripcion: null,
+        cantidad: String(it.cantidad),
+        precio_unitario: String(it.precio),
+        descuento_pct: "0",
+        source_price_list_id: suggested != null && suggested === it.precio ? sourceListId : null,
+      });
+    }
+    setItems((prev) => [...prev, ...newItems]);
   };
 
   // Items normalizados para el cálculo en vivo.
