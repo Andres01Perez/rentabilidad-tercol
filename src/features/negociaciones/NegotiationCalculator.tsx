@@ -58,8 +58,7 @@ import {
   type NegotiationItemRow,
 } from "./queries";
 import type { NegotiationRow } from "./NegociacionesPage";
-import { useNegotiationLive, type LiveItem, type LiveSuggestion } from "./useNegotiationLive";
-import { SuggestionPanel } from "./SuggestionPanel";
+import { useNegotiationLive, type LiveItem } from "./useNegotiationLive";
 
 const NONE_LIST_VALUE = "__none__";
 
@@ -200,26 +199,6 @@ export function NegotiationCalculator({
     setSearchOpen(false);
   };
 
-  const addSuggestion = (s: LiveSuggestion) => {
-    if (items.some((i) => i.referencia === s.referencia)) {
-      toast.info(`"${s.referencia}" ya está añadida`);
-      return;
-    }
-    setItems((prev) => [
-      ...prev,
-      {
-        uid: makeUid(),
-        referencia: s.referencia,
-        descripcion: s.descripcion,
-        cantidad: "1",
-        precio_unitario: String(s.precio),
-        descuento_pct: "0",
-        source_price_list_id: sourceListId,
-      },
-    ]);
-    toast.success(`"${s.referencia}" añadida`);
-  };
-
   const updateItem = (uid: string, patch: Partial<EditorItem>) => {
     setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
   };
@@ -246,7 +225,7 @@ export function NegotiationCalculator({
     costMonths,
     opMonths: costMonths, // por simplicidad reutilizamos los mismos meses
     minMarginPct,
-    topSuggestions: 6,
+    topSuggestions: 0,
     sourcePriceListId: sourceListId,
     enabled: items.length > 0,
   });
@@ -540,11 +519,6 @@ export function NegotiationCalculator({
           </div>
         )}
       </div>
-
-      {/* Sugerencias para llegar a la meta */}
-      {belowMin && live.suggestions.length > 0 && (
-        <SuggestionPanel suggestions={live.suggestions} onAdd={addSuggestion} />
-      )}
 
       {/* Search */}
       <div className="glass relative z-40 rounded-2xl border border-border/60 p-4">
