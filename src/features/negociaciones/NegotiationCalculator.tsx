@@ -397,15 +397,17 @@ export function NegotiationCalculator({
   const handleExportPdf = () => {
     if (items.length === 0) return;
     try {
-      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
       const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 54; // ~0.75"
       const listName = priceLists.find((p) => p.id === sourceListId)?.name ?? "Sin lista";
       const today = new Date();
       const dateStr = today.toLocaleDateString("es-CO");
 
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.text(name.trim() || "Negociación", 40, 40);
+      doc.text(name.trim() || "Negociación", margin, margin);
 
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
@@ -414,22 +416,19 @@ export function NegotiationCalculator({
         `Lista de precios: ${listName}   ·   Meses de costo: ${
           costMonths.length ? costMonths.join(", ") : "—"
         }   ·   Generado: ${dateStr}`,
-        40,
-        58,
+        margin,
+        margin + 16,
       );
       doc.setTextColor(0);
 
       const body = items.map((it) => {
         const m = metricsByRef.get(it.referencia);
-        const qty = parseNum(it.cantidad) ?? 0;
         const price = parseNum(it.precio_unitario) ?? 0;
         const disc = parseNum(it.descuento_pct) ?? 0;
+        const finalPrice = price * (1 - disc / 100);
         return [
           it.referencia,
-          it.descripcion ?? "",
-          String(qty),
-          formatCurrency(price),
-          `${disc}%`,
+          formatCurrency(finalPrice),
           m?.ctuProm == null ? "—" : formatCurrency(m.ctuProm),
           m?.margenUnit == null ? "—" : formatCurrency(m.margenUnit),
           m?.margenPct == null ? "—" : formatPercent(m.margenPct, 1),
@@ -438,60 +437,111 @@ export function NegotiationCalculator({
       });
 
       autoTable(doc, {
-        startY: 80,
-        head: [[
-          "Ref",
-          "Descripción",
-          "Cant.",
-          "PUV",
-          "Desc %",
-          "CTU prom",
-          "Margen U",
-          "Margen %",
-          "Subtotal",
-        ]],
+        startY: margin + 32,
+        head: [["Referencia", "Precio", "CTU", "Margen U $", "Margen %", "Subtotal"]],
         body,
         styles: { fontSize: 8, cellPadding: 4 },
         headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         columnStyles: {
           0: { fontStyle: "bold" },
+          1: { halign: "right" },
           2: { halign: "right" },
           3: { halign: "right" },
           4: { halign: "right" },
-          5: { halign: "right" },
-          6: { halign: "right" },
-          7: { halign: "right" },
-          8: { halign: "right", fontStyle: "bold" },
+          5: { halign: "right", fontStyle: "bold" },
         },
-        margin: { left: 40, right: 40 },
+        margin: { top: margin, right: margin, bottom: margin, left: margin },
       });
 
+      // --- Card de resumen ---
       const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-      const totalsY = finalY + 20;
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text("Totales", 40, totalsY);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      const lines = [
-        `Ventas netas: ${formatCurrency(totals.ventasNetas)}`,
-        `Costo total: ${formatCurrency(totals.costoTotal)}`,
-        `Margen bruto $: ${formatCurrency(totals.margenBruto)}`,
-        `Margen bruto %: ${
-          totals.ventasNetas === 0 ? "—" : formatPercent(totals.margenBrutoPct, 1)
-        }   (Meta ${formatPercent(minMarginPct, 0)})`,
-      ];
-      lines.forEach((ln, i) => doc.text(ln, 40, totalsY + 16 + i * 14));
+      const cardHeight = 150;
+      const cardWidth = pageWidth - margin * 2;
+      let cardY = finalY + 24;
+      // Si no entra en la página, nueva página.
+      if (cardY + cardHeight > pageHeight - margin) {
+        doc.addPage();
+        cardY = margin;
+      }
 
-      doc.setFontSize(8);
-      doc.setTextColor(140);
-      doc.text(
-        `Página 1 de ${doc.getNumberOfPages()}`,
-        pageWidth - 40,
-        doc.internal.pageSize.getHeight() - 20,
-        { align: "right" },
-      );
+      doc.setDrawColor(200);
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(margin, cardY, cardWidth, cardHeight, 8, 8, "FD");
+
+      const padX = margin + 16;
+      let textY = cardY + 22;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30);
+      doc.text("Resumen", padX, textY);
+      textY += 18;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const rows: Array<[string, string]> = [
+        ["Venta neta", formatCurrency(totals.ventasNetas)],
+        ["Costo total", formatCurrency(totals.costoTotal)],
+        ["Margen bruto $", formatCurrency(totals.margenBruto)],
+        [
+          "Margen bruto %",
+          totals.ventasNetas === 0
+            ? "—"
+            : `${formatPercent(totals.margenBrutoPct, 1)}   (Meta ${formatPercent(minMarginPct, 0)})`,
+        ],
+      ];
+      const labelX = padX;
+      const valueX = margin + cardWidth - 16;
+      rows.forEach(([label, value]) => {
+        doc.setTextColor(110);
+        doc.text(label, labelX, textY);
+        doc.setTextColor(20);
+        doc.text(value, valueX, textY, { align: "right" });
+        textY += 16;
+      });
+
+      // Línea separadora + nota meta
+      textY += 6;
+      doc.setDrawColor(220);
+      doc.line(padX, textY, margin + cardWidth - 16, textY);
+      textY += 16;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      const meetsMeta =
+        totals.ventasNetas > 0 && totals.margenBrutoPct >= minMarginPct;
+      if (meetsMeta) {
+        doc.setTextColor(20, 120, 60);
+        doc.text(
+          `Meta del ${formatPercent(minMarginPct, 0)} cumplida.`,
+          padX,
+          textY,
+        );
+      } else {
+        doc.setTextColor(170, 40, 40);
+        const gap = totals.gapPct;
+        doc.text(
+          `Faltan ${formatPercent(gap, 1)} para llegar a la meta del ${formatPercent(minMarginPct, 0)}.`,
+          padX,
+          textY,
+        );
+      }
+
+      // Pie de página en todas las páginas
+      const totalPages = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(8);
+        doc.setTextColor(140);
+        doc.setFont("helvetica", "normal");
+        doc.text(
+          `Página ${p} de ${totalPages}`,
+          pageWidth - margin,
+          pageHeight - margin / 2,
+          { align: "right" },
+        );
+      }
 
       const slug =
         (name.trim() || "negociacion")
@@ -511,7 +561,7 @@ export function NegotiationCalculator({
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-3">
       {/* KPIs en vivo (sticky con espaciado respecto al header) */}
       <div className="sticky top-14 z-10 -mx-1 bg-background/95 px-1 pb-2 pt-3 backdrop-blur-xl">
         <div
@@ -702,7 +752,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-20 rounded-2xl border border-border/60 px-3 py-2">
+      <div className="glass relative z-20 mt-4 mb-1 rounded-2xl border border-border/60 px-3 py-2">
         <div className="flex items-center gap-3">
           <label className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:block">
             Añadir referencia
@@ -788,9 +838,9 @@ export function NegotiationCalculator({
             Aún no hay referencias. Búscalas arriba para añadirlas.
           </div>
         ) : (
-          <div className="relative max-h-[55vh] overflow-auto">
+          <div className="relative">
             <Table>
-              <TableHeader className="sticky top-0 z-[1] bg-card/95 backdrop-blur">
+              <TableHeader className="bg-card/95">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[110px]">Ref</TableHead>
                   <TableHead className="w-[110px] text-right">Cant.</TableHead>
