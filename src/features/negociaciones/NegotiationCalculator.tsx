@@ -561,7 +561,7 @@ export function NegotiationCalculator({
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-3">
       {/* KPIs en vivo (sticky con espaciado respecto al header) */}
       <div className="sticky top-14 z-10 -mx-1 bg-background/95 px-1 pb-2 pt-3 backdrop-blur-xl">
         <div
@@ -752,7 +752,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-20 rounded-2xl border border-border/60 px-3 py-2">
+      <div className="glass relative z-20 mt-4 mb-1 rounded-2xl border border-border/60 px-3 py-2">
         <div className="flex items-center gap-3">
           <label className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:block">
             Añadir referencia
@@ -838,9 +838,9 @@ export function NegotiationCalculator({
             Aún no hay referencias. Búscalas arriba para añadirlas.
           </div>
         ) : (
-          <div className="relative max-h-[55vh] overflow-auto">
+          <div className="relative">
             <Table>
-              <TableHeader className="sticky top-0 z-[1] bg-card/95 backdrop-blur">
+              <TableHeader className="bg-card/95">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[110px]">Ref</TableHead>
                   <TableHead className="w-[110px] text-right">Cant.</TableHead>
