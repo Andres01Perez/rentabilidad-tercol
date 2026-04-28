@@ -561,9 +561,9 @@ export function NegotiationCalculator({
   };
 
   return (
-    <section className="space-y-3">
+    <section>
       {/* KPIs en vivo (sticky con espaciado respecto al header) */}
-      <div className="sticky top-14 z-10 -mx-1 bg-background/95 px-1 pb-2 pt-3 backdrop-blur-xl">
+      <div className="sticky top-14 z-30 -mx-4 bg-background/80 px-4 pb-3 pt-2 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div
           className={cn(
             "relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-colors",
@@ -752,7 +752,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-20 mt-4 mb-1 rounded-2xl border border-border/60 px-3 py-2">
+      <div className="glass relative z-20 mt-4 mb-2 rounded-2xl border border-border/60 px-3 py-2">
         <div className="flex items-center gap-3">
           <label className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:block">
             Añadir referencia
