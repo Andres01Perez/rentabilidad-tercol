@@ -1,26 +1,69 @@
 ## Objetivo
-Ajustar el layout del bloque de “Añadir referencia” y de la tabla de items para que ninguno se monte sobre el otro durante scroll, apertura del buscador o uso del header sticky de la tabla.
 
-## Qué voy a cambiar
-1. Revisar el orden visual y el stacking context del buscador, su dropdown y el contenedor de la tabla.
-2. Corregir los `z-index`, `position` y fondos opacos para que:
-   - el dropdown del buscador se vea por encima de la tabla cuando esté abierto,
-   - el header sticky de la tabla no tape el buscador,
-   - no haya transparencias o solapes visuales al hacer scroll.
-3. Ajustar el espaciado vertical entre ambos bloques para que el selector de referencias tenga respiración suficiente y no quede “pegado” a la tabla.
-4. Validar que el estado vacío, la tabla cargada y el dropdown de resultados se comporten bien en el viewport actual.
+Compactar la vista del calculador de negociaciones eliminando el bloque superior de formulario y reubicando los campos esenciales dentro del contenedor de acciones inferior (el sticky donde hoy aparecen "Eliminar" y "Guardar cambios"). Esto deja el viewport más limpio: KPIs sticky → buscador → tabla → action bar todo-en-uno.
+
+## Cambios en `src/features/negociaciones/NegotiationCalculator.tsx`
+
+### 1. Eliminar el bloque "Header form" (líneas ~400-466)
+Se elimina por completo el `<div className="glass …">` que contiene:
+- Input de Nombre
+- Selector de Lista de precios sugerida
+- MultiMonthPicker de Meses de costo
+- Textarea de Notas / observaciones
+
+### 2. Eliminar el estado y lógica de notas
+- Quitar el `useState` de `notes` y su `setNotes`.
+- Quitar `notes` del payload de guardado (insert/update de la negociación). El campo en BD queda en `null` / sin tocar.
+- Quitar el import de `Textarea` si ya no se usa en el archivo.
+
+### 3. Rediseñar el action bar inferior (sticky bottom, línea ~761)
+Convertir ese contenedor en una barra de control completa con dos filas:
+
+**Fila superior (campos del formulario):**
+- Input compacto de Nombre (con borde destructivo si no es válido).
+- Selector de Lista de precios sugerida (compacto).
+- MultiMonthPicker de meses de costo (compacto).
+
+Layout responsive: grid de 3 columnas en desktop, apilado en móvil.
+
+**Fila inferior (acciones existentes, sin cambios funcionales):**
+- Badge de cantidad de items + indicador "Recalculando…".
+- Botones Cancelar / Eliminar / Guardar.
+
+El contenedor mantiene `sticky bottom-4`, `backdrop-blur`, sombra y borde para que siga flotando sobre la tabla al hacer scroll.
+
+### 4. Ajustes visuales y de espaciado
+- Mantener el orden vertical: KPIs sticky → Buscador → Tabla → Action bar sticky.
+- Asegurar que el action bar tenga padding suficiente (`p-4`) y separación interna (`gap-3`) para que los inputs respiren.
+- Conservar `z-20` para que quede sobre la tabla, y opacidad/blur para legibilidad.
+- Validar que en viewports angostos (< md) los campos se apilen sin romper la barra.
+
+### 5. Validaciones y autoFocus
+- El `autoFocus` del input de Nombre se mantiene cuando se está creando una negociación nueva.
+- La regla `validation.nameOk` sigue aplicando: borde rojo si está vacío, botón Guardar deshabilitado.
 
 ## Resultado esperado
-- El buscador de “Añadir referencia” queda siempre legible y accesible.
-- La tabla no invade el área del buscador.
-- El header sticky de la tabla sigue funcionando sin generar superposición indebida.
-- El dropdown de resultados aparece por encima solo cuando corresponde.
 
-## Detalles técnicos
-- El ajuste se concentrará en `src/features/negociaciones/NegotiationCalculator.tsx`.
-- Voy a tratar el problema como uno de capas y contenedores, no de lógica de negocio.
-- Si hace falta, se normalizarán estos puntos:
-  - `z-0 / z-10 / z-20 / z-50`
-  - `relative / sticky / absolute`
-  - fondos (`bg-card`, `bg-background`, `bg-popover`) para evitar transparencias aparentes
-  - márgenes/padding entre el buscador y la tabla
+```text
+┌─────────────────────────────────────────┐
+│ KPIs (sticky top)                       │
+├─────────────────────────────────────────┤
+│ Añadir referencia (buscador)            │
+├─────────────────────────────────────────┤
+│ Tabla de items                          │
+│  …                                       │
+├─────────────────────────────────────────┤
+│ [Nombre] [Lista precios] [Meses costo]  │ ← sticky bottom
+│ 1 item · [Cancelar] [Eliminar] [Guardar]│
+└─────────────────────────────────────────┘
+```
+
+- Vista más limpia, menos scroll vertical inicial.
+- Toda la configuración de la negociación queda accesible sin perder contexto de la tabla.
+- Se elimina el campo de Notas/observaciones según lo solicitado.
+
+## Fuera de alcance
+
+- No se toca el esquema de BD ni los queries (solo se omite enviar `notes`).
+- No se modifica la lógica de cálculo, búsqueda, importación ni KPIs.
+- No se cambia el comportamiento del sticky de KPIs ni del buscador.
