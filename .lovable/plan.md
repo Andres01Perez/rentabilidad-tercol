@@ -1,69 +1,60 @@
-## Objetivo
+# Unificar header sticky y exportar a PDF
 
-Compactar la vista del calculador de negociaciones eliminando el bloque superior de formulario y reubicando los campos esenciales dentro del contenedor de acciones inferior (el sticky donde hoy aparecen "Eliminar" y "Guardar cambios"). Esto deja el viewport más limpio: KPIs sticky → buscador → tabla → action bar todo-en-uno.
+Tres cambios en `src/features/negociaciones/NegotiationCalculator.tsx` para una vista más limpia y eficiente.
 
-## Cambios en `src/features/negociaciones/NegotiationCalculator.tsx`
+## 1. Fusionar barra inferior con KPIs en un único contenedor sticky superior
 
-### 1. Eliminar el bloque "Header form" (líneas ~400-466)
-Se elimina por completo el `<div className="glass …">` que contiene:
-- Input de Nombre
-- Selector de Lista de precios sugerida
-- MultiMonthPicker de Meses de costo
-- Textarea de Notas / observaciones
+Mover los campos (Nombre, Lista de precios, Meses de costo) y los botones de acción (Cancelar / Eliminar / Guardar + contador de items) actualmente en `sticky bottom-4` (líneas 688–788) hacia el contenedor `sticky top-14` de KPIs (líneas 396–475), para que **todo viaje junto** al hacer scroll.
 
-### 2. Eliminar el estado y lógica de notas
-- Quitar el `useState` de `notes` y su `setNotes`.
-- Quitar `notes` del payload de guardado (insert/update de la negociación). El campo en BD queda en `null` / sin tocar.
-- Quitar el import de `Textarea` si ya no se usa en el archivo.
-
-### 3. Rediseñar el action bar inferior (sticky bottom, línea ~761)
-Convertir ese contenedor en una barra de control completa con dos filas:
-
-**Fila superior (campos del formulario):**
-- Input compacto de Nombre (con borde destructivo si no es válido).
-- Selector de Lista de precios sugerida (compacto).
-- MultiMonthPicker de meses de costo (compacto).
-
-Layout responsive: grid de 3 columnas en desktop, apilado en móvil.
-
-**Fila inferior (acciones existentes, sin cambios funcionales):**
-- Badge de cantidad de items + indicador "Recalculando…".
-- Botones Cancelar / Eliminar / Guardar.
-
-El contenedor mantiene `sticky bottom-4`, `backdrop-blur`, sombra y borde para que siga flotando sobre la tabla al hacer scroll.
-
-### 4. Ajustes visuales y de espaciado
-- Mantener el orden vertical: KPIs sticky → Buscador → Tabla → Action bar sticky.
-- Asegurar que el action bar tenga padding suficiente (`p-4`) y separación interna (`gap-3`) para que los inputs respiren.
-- Conservar `z-20` para que quede sobre la tabla, y opacidad/blur para legibilidad.
-- Validar que en viewports angostos (< md) los campos se apilen sin romper la barra.
-
-### 5. Validaciones y autoFocus
-- El `autoFocus` del input de Nombre se mantiene cuando se está creando una negociación nueva.
-- La regla `validation.nameOk` sigue aplicando: borde rojo si está vacío, botón Guardar deshabilitado.
-
-## Resultado esperado
+Estructura final del sticky superior:
 
 ```text
-┌─────────────────────────────────────────┐
-│ KPIs (sticky top)                       │
-├─────────────────────────────────────────┤
-│ Añadir referencia (buscador)            │
-├─────────────────────────────────────────┤
-│ Tabla de items                          │
-│  …                                       │
-├─────────────────────────────────────────┤
-│ [Nombre] [Lista precios] [Meses costo]  │ ← sticky bottom
-│ 1 item · [Cancelar] [Eliminar] [Guardar]│
-└─────────────────────────────────────────┘
+┌─ sticky top-14 (un solo glass card) ───────────────┐
+│  [Nombre] [Lista precios] [Meses costo]            │  ← fila form
+│  ─────────────────────────────────────────────     │
+│  [KPI Ventas] [KPI Costo] [KPI $] [KPI %]          │  ← fila KPIs
+│  [Banner meta margen ✓ / ⚠]                        │  ← estado
+│  ─────────────────────────────────────────────     │
+│  [N items · Recalculando…]   [Cancelar][Elim][Exportar PDF][Guardar] │
+└────────────────────────────────────────────────────┘
 ```
 
-- Vista más limpia, menos scroll vertical inicial.
-- Toda la configuración de la negociación queda accesible sin perder contexto de la tabla.
-- Se elimina el campo de Notas/observaciones según lo solicitado.
+- Eliminar el `<div className="sticky bottom-4 …">` completo al final.
+- El nuevo contenedor mantiene el coloreado dinámico según `belowMin / okMin`.
+- Conservar `z-20` y `backdrop-blur-xl` para flotar sobre la tabla.
 
-## Fuera de alcance
+## 2. Botón "Exportar PDF"
 
-- No se toca el esquema de BD ni los queries (solo se omite enviar `notes`).
-- No se modifica la lógica de cálculo, búsqueda, importación ni KPIs.
-- No se cambia el comportamiento del sticky de KPIs ni del buscador.
+Añadir botón en la fila de acciones (al lado de Guardar), visible siempre que `items.length > 0`.
+
+Exporta:
+- Encabezado: nombre de la negociación, lista de precios, meses de costo, fecha.
+- Tabla de productos con columnas actuales (referencia, descripción, cantidad, precio, descuento, subtotal, costo, margen).
+- Pie con totales (ventas netas, costo total, margen $, margen %).
+
+## 3. Limpieza de espacio
+
+Al desaparecer la barra inferior, la tabla de items recupera todo el espacio vertical bajo el sticky.
+
+---
+
+## Detalles técnicos
+
+**Librería PDF**: usar `jspdf` + `jspdf-autotable` (ligeras, funcionan en navegador, ya común en este tipo de exports). Instalar con `bun add jspdf jspdf-autotable`.
+
+**Nuevo handler** `handleExportPdf()` en el componente:
+- Construye filas desde `live.items` (que ya tiene cálculos resueltos: subtotal, costo unitario, margen).
+- Usa `autoTable` con estilos sobrios (header gris, zebra rows).
+- Nombre de archivo: `negociacion-${slugify(name)}-${YYYYMMDD}.pdf`.
+- Si no hay items, deshabilitar el botón.
+
+**Reordenamiento JSX** (sin tocar lógica de negocio):
+- Mover bloque `grid md:grid-cols-3` (form) + bloque acciones desde el sticky inferior al sticky superior, encima de la fila de KPIs.
+- Borrar el contenedor `sticky bottom-4` y sus paréntesis correspondientes.
+- Verificar balance de tags JSX tras la edición.
+
+**Sin cambios** en: queries, hooks, lógica de guardado, validaciones, tabla de items, search bar.
+
+## Archivos modificados
+- `src/features/negociaciones/NegotiationCalculator.tsx` (reordenamiento JSX + handler export)
+- `package.json` (deps `jspdf`, `jspdf-autotable`)

@@ -13,8 +13,11 @@ import {
   Percent,
   Calendar,
   Upload,
+  FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -391,6 +394,122 @@ export function NegotiationCalculator({
   const belowMin = totals.belowMin && items.length > 0;
   const okMin = !belowMin && items.length > 0 && totals.ventasNetas > 0;
 
+  const handleExportPdf = () => {
+    if (items.length === 0) return;
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const listName = priceLists.find((p) => p.id === sourceListId)?.name ?? "Sin lista";
+      const today = new Date();
+      const dateStr = today.toLocaleDateString("es-CO");
+
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text(name.trim() || "Negociación", 40, 40);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(110);
+      doc.text(
+        `Lista de precios: ${listName}   ·   Meses de costo: ${
+          costMonths.length ? costMonths.join(", ") : "—"
+        }   ·   Generado: ${dateStr}`,
+        40,
+        58,
+      );
+      doc.setTextColor(0);
+
+      const body = items.map((it) => {
+        const m = metricsByRef.get(it.referencia);
+        const qty = parseNum(it.cantidad) ?? 0;
+        const price = parseNum(it.precio_unitario) ?? 0;
+        const disc = parseNum(it.descuento_pct) ?? 0;
+        return [
+          it.referencia,
+          it.descripcion ?? "",
+          String(qty),
+          formatCurrency(price),
+          `${disc}%`,
+          m?.ctuProm == null ? "—" : formatCurrency(m.ctuProm),
+          m?.margenUnit == null ? "—" : formatCurrency(m.margenUnit),
+          m?.margenPct == null ? "—" : formatPercent(m.margenPct, 1),
+          formatCurrency(m?.subtotal ?? 0),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 80,
+        head: [[
+          "Ref",
+          "Descripción",
+          "Cant.",
+          "PUV",
+          "Desc %",
+          "CTU prom",
+          "Margen U",
+          "Margen %",
+          "Subtotal",
+        ]],
+        body,
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { fontStyle: "bold" },
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+          6: { halign: "right" },
+          7: { halign: "right" },
+          8: { halign: "right", fontStyle: "bold" },
+        },
+        margin: { left: 40, right: 40 },
+      });
+
+      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+      const totalsY = finalY + 20;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Totales", 40, totalsY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const lines = [
+        `Ventas netas: ${formatCurrency(totals.ventasNetas)}`,
+        `Costo total: ${formatCurrency(totals.costoTotal)}`,
+        `Margen bruto $: ${formatCurrency(totals.margenBruto)}`,
+        `Margen bruto %: ${
+          totals.ventasNetas === 0 ? "—" : formatPercent(totals.margenBrutoPct, 1)
+        }   (Meta ${formatPercent(minMarginPct, 0)})`,
+      ];
+      lines.forEach((ln, i) => doc.text(ln, 40, totalsY + 16 + i * 14));
+
+      doc.setFontSize(8);
+      doc.setTextColor(140);
+      doc.text(
+        `Página 1 de ${doc.getNumberOfPages()}`,
+        pageWidth - 40,
+        doc.internal.pageSize.getHeight() - 20,
+        { align: "right" },
+      );
+
+      const slug =
+        (name.trim() || "negociacion")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "") || "negociacion";
+      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
+        today.getDate(),
+      ).padStart(2, "0")}`;
+      doc.save(`negociacion-${slug}-${ymd}.pdf`);
+    } catch (e) {
+      console.error(e);
+      toast.error("No se pudo exportar el PDF");
+    }
+  };
+
   return (
     <section className="space-y-5">
       {/* KPIs en vivo (sticky con espaciado respecto al header) */}
@@ -410,6 +529,61 @@ export function NegotiationCalculator({
               <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
             </div>
           )}
+          {/* Fila: campos del formulario */}
+          <div className="mb-3 grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Nombre <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Negociación FM"
+                className={cn("h-9", !validation.nameOk && "border-destructive")}
+                autoFocus={!isEdit}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Lista de precios sugerida
+              </label>
+              <Select
+                value={sourceListId ?? NONE_LIST_VALUE}
+                onValueChange={(v) => setSourceListId(v === NONE_LIST_VALUE ? null : v)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Sin lista (precio manual)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_LIST_VALUE}>Sin lista (precio manual)</SelectItem>
+                  {priceLists.map((pl) => (
+                    <SelectItem key={pl.id} value={pl.id}>
+                      {pl.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <Calendar className="mr-1 inline h-3 w-3" />
+                Meses de costo (CTU promedio)
+              </label>
+              {catalogLoading ? (
+                <div className="flex h-9 items-center text-xs text-muted-foreground">
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Cargando…
+                </div>
+              ) : (
+                <MultiMonthPicker
+                  available={availCostMonths}
+                  selected={costMonths}
+                  onChange={setCostMonths}
+                  emptyLabel="Selecciona mes(es)"
+                />
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
             icon={Wallet}
@@ -471,6 +645,59 @@ export function NegotiationCalculator({
             )}
           </div>
         )}
+
+          {/* Fila: acciones */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="gap-1">
+                {items.length} item{items.length !== 1 ? "s" : ""}
+              </Badge>
+              {liveLoading && (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Recalculando…
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isEdit && onCancel && (
+                <Button variant="ghost" size="sm" onClick={onCancel}>
+                  Cancelar
+                </Button>
+              )}
+              {isEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1 h-4 w-4" /> Eliminar
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={items.length === 0}
+                className="gap-1.5"
+              >
+                <FileDown className="h-4 w-4" /> Exportar PDF
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={!validation.canSave || saving}
+                className="gap-1.5 bg-gradient-brand text-white shadow-elegant"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {isEdit ? "Guardar cambios" : "Crear negociación"}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -683,108 +910,6 @@ export function NegotiationCalculator({
             </Table>
           </div>
         )}
-      </div>
-
-      {/* Acciones */}
-      <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/95 p-4 shadow-elegant backdrop-blur-xl">
-        {/* Fila superior: campos del formulario */}
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Nombre <span className="text-destructive">*</span>
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Negociación FM"
-              className={cn("h-9", !validation.nameOk && "border-destructive")}
-              autoFocus={!isEdit}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Lista de precios sugerida
-            </label>
-            <Select
-              value={sourceListId ?? NONE_LIST_VALUE}
-              onValueChange={(v) => setSourceListId(v === NONE_LIST_VALUE ? null : v)}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Sin lista (precio manual)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_LIST_VALUE}>Sin lista (precio manual)</SelectItem>
-                {priceLists.map((pl) => (
-                  <SelectItem key={pl.id} value={pl.id}>
-                    {pl.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Calendar className="mr-1 inline h-3 w-3" />
-              Meses de costo (CTU promedio)
-            </label>
-            {catalogLoading ? (
-              <div className="flex h-9 items-center text-xs text-muted-foreground">
-                <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Cargando…
-              </div>
-            ) : (
-              <MultiMonthPicker
-                available={availCostMonths}
-                selected={costMonths}
-                onChange={setCostMonths}
-                emptyLabel="Selecciona mes(es)"
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Fila inferior: acciones */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="secondary" className="gap-1">
-              {items.length} item{items.length !== 1 ? "s" : ""}
-            </Badge>
-            {liveLoading && (
-              <span className="flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> Recalculando…
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isEdit && onCancel && (
-              <Button variant="ghost" size="sm" onClick={onCancel}>
-                Cancelar
-              </Button>
-            )}
-            {isEdit && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDelete(true)}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="mr-1 h-4 w-4" /> Eliminar
-              </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={() => void handleSave()}
-              disabled={!validation.canSave || saving}
-              className="gap-1.5 bg-gradient-brand text-white shadow-elegant"
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {isEdit ? "Guardar cambios" : "Crear negociación"}
-            </Button>
-          </div>
-        </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
