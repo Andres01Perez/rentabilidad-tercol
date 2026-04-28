@@ -547,7 +547,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-0 rounded-2xl border border-border/60 p-4">
+      <div className="glass relative z-20 rounded-2xl border border-border/60 p-4">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Añadir referencia
@@ -621,7 +621,7 @@ export function NegotiationCalculator({
       </div>
 
       {/* Items table */}
-      <div className="glass relative z-0 rounded-2xl border border-border/60 p-1">
+      <div className="glass relative z-0 rounded-2xl border border-border/60 p-1 isolate">
         {itemsLoading ? (
           <div className="flex h-32 items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -631,9 +631,9 @@ export function NegotiationCalculator({
             Aún no hay referencias. Búscalas arriba para añadirlas.
           </div>
         ) : (
-          <div className="max-h-[55vh] overflow-auto">
+          <div className="relative max-h-[55vh] overflow-auto">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
+              <TableHeader className="sticky top-0 z-[1] bg-card/95 backdrop-blur">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[110px]">Ref</TableHead>
                   <TableHead className="w-[110px] text-right">Cant.</TableHead>
