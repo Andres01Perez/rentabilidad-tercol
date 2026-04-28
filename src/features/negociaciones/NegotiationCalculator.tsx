@@ -702,33 +702,35 @@ export function NegotiationCalculator({
       </div>
 
       {/* Search */}
-      <div className="glass relative z-20 rounded-2xl border border-border/60 p-4">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="glass relative z-20 rounded-2xl border border-border/60 px-3 py-2">
+        <div className="flex items-center gap-3">
+          <label className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:block">
             Añadir referencia
           </label>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Buscar por referencia o descripción (mín 2 caracteres)"
+              className="h-9 pl-9"
+            />
+          </div>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setImportOpen(true)}
-            className="gap-1.5"
+            className="shrink-0 gap-1.5"
           >
             <Upload className="h-3.5 w-3.5" /> Importar items
           </Button>
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-            placeholder="Buscar por referencia o descripción (mín 2 caracteres)"
-            className="pl-9"
-          />
           {searchOpen && query.trim().length >= 2 && (
             <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-popover shadow-lg">
               <div className="flex items-center justify-between border-b border-border/60 px-2 py-1">
