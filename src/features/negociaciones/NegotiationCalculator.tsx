@@ -529,6 +529,61 @@ export function NegotiationCalculator({
               <div className="h-full w-1/3 animate-[loading-bar_1.2s_ease-in-out_infinite] bg-gradient-brand" />
             </div>
           )}
+          {/* Fila: campos del formulario */}
+          <div className="mb-3 grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Nombre <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Negociación FM"
+                className={cn("h-9", !validation.nameOk && "border-destructive")}
+                autoFocus={!isEdit}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Lista de precios sugerida
+              </label>
+              <Select
+                value={sourceListId ?? NONE_LIST_VALUE}
+                onValueChange={(v) => setSourceListId(v === NONE_LIST_VALUE ? null : v)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Sin lista (precio manual)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_LIST_VALUE}>Sin lista (precio manual)</SelectItem>
+                  {priceLists.map((pl) => (
+                    <SelectItem key={pl.id} value={pl.id}>
+                      {pl.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <Calendar className="mr-1 inline h-3 w-3" />
+                Meses de costo (CTU promedio)
+              </label>
+              {catalogLoading ? (
+                <div className="flex h-9 items-center text-xs text-muted-foreground">
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Cargando…
+                </div>
+              ) : (
+                <MultiMonthPicker
+                  available={availCostMonths}
+                  selected={costMonths}
+                  onChange={setCostMonths}
+                  emptyLabel="Selecciona mes(es)"
+                />
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
             icon={Wallet}
@@ -590,6 +645,59 @@ export function NegotiationCalculator({
             )}
           </div>
         )}
+
+          {/* Fila: acciones */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="gap-1">
+                {items.length} item{items.length !== 1 ? "s" : ""}
+              </Badge>
+              {liveLoading && (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Recalculando…
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isEdit && onCancel && (
+                <Button variant="ghost" size="sm" onClick={onCancel}>
+                  Cancelar
+                </Button>
+              )}
+              {isEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="mr-1 h-4 w-4" /> Eliminar
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={items.length === 0}
+                className="gap-1.5"
+              >
+                <FileDown className="h-4 w-4" /> Exportar PDF
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={!validation.canSave || saving}
+                className="gap-1.5 bg-gradient-brand text-white shadow-elegant"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {isEdit ? "Guardar cambios" : "Crear negociación"}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
