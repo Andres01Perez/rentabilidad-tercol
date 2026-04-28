@@ -19,7 +19,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -118,7 +117,6 @@ export function NegotiationCalculator({
 
   // Estado del formulario.
   const [name, setName] = React.useState(negotiation?.name ?? "");
-  const [notes, setNotes] = React.useState(negotiation?.notes ?? "");
   const [sourceListId, setSourceListId] = React.useState<string | null>(
     negotiation?.source_price_list_id ?? null,
   );
@@ -321,7 +319,6 @@ export function NegotiationCalculator({
           .from("negotiations")
           .update({
             name: name.trim(),
-            notes: notes.trim() || null,
             source_price_list_id: sourceListId,
             cost_months: costMonths,
             min_margin_pct: minMarginPct,
@@ -343,7 +340,6 @@ export function NegotiationCalculator({
           .from("negotiations")
           .insert({
             name: name.trim(),
-            notes: notes.trim() || null,
             source_price_list_id: sourceListId,
             cost_months: costMonths,
             min_margin_pct: minMarginPct,
