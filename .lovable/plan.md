@@ -1,59 +1,26 @@
+## Objetivo
+Ajustar el layout del bloque de “Añadir referencia” y de la tabla de items para que ninguno se monte sobre el otro durante scroll, apertura del buscador o uso del header sticky de la tabla.
 
-# Importar items a una negociación
+## Qué voy a cambiar
+1. Revisar el orden visual y el stacking context del buscador, su dropdown y el contenedor de la tabla.
+2. Corregir los `z-index`, `position` y fondos opacos para que:
+   - el dropdown del buscador se vea por encima de la tabla cuando esté abierto,
+   - el header sticky de la tabla no tape el buscador,
+   - no haya transparencias o solapes visuales al hacer scroll.
+3. Ajustar el espaciado vertical entre ambos bloques para que el selector de referencias tenga respiración suficiente y no quede “pegado” a la tabla.
+4. Validar que el estado vacío, la tabla cargada y el dropdown de resultados se comporten bien en el viewport actual.
 
-Sí, es totalmente posible y el archivo adjunto (`eliminr_2.xlsx`) ya viene con el formato correcto: tres columnas `Referencia`, `cantidad`, `precio unitario`. El plan reutiliza el parser de Excel ya existente (`src/lib/excel.ts`) e incorpora una plantilla descargable rígida para forzar el formato.
+## Resultado esperado
+- El buscador de “Añadir referencia” queda siempre legible y accesible.
+- La tabla no invade el área del buscador.
+- El header sticky de la tabla sigue funcionando sin generar superposición indebida.
+- El dropdown de resultados aparece por encima solo cuando corresponde.
 
-## Funcionalidad
-
-En el `NegotiationCalculator`, al lado del buscador de referencias, añadir un botón **"Importar items"** que abre un diálogo con tres pestañas:
-
-1. **Subir Excel/CSV** — dropzone que acepta `.xlsx` y `.csv`. Se parsea con headers fijos.
-2. **Pegar texto** — textarea donde el usuario pega filas desde Excel/Sheets (TSV) o CSV. Detecta separador automáticamente (tab o coma o `;`).
-3. **Descargar plantilla** — botón que genera y descarga `plantilla_negociacion.xlsx` con solo los encabezados: `Referencia | cantidad | precio unitario`.
-
-## Reglas de validación (estrictas, plantilla obligatoria)
-
-- Headers exactos esperados (case-insensitive, sin acentos): `referencia`, `cantidad`, `precio unitario` (alias: `precio_unitario`, `precio`).
-- Si faltan headers requeridos → error claro indicando qué falta.
-- `cantidad` y `precio unitario` se parsean como números. Filas con `cantidad <= 0` o `precio <= 0` se marcan como **descartables** pero se muestran en preview con checkbox para que el usuario decida si quiere incluirlas (en el archivo adjunto hay muchas con 0, hay que filtrarlas por defecto).
-- Referencias duplicadas dentro del archivo → se consolidan (suma cantidades) o se avisa, según preview.
-- Referencias que ya existen en la negociación actual → se omiten con aviso (mismo comportamiento que `addReference`).
-
-## Preview antes de aplicar
-
-Tras parsear, el diálogo muestra una tabla con:
-- N° filas detectadas, válidas, descartadas (cant=0 o precio=0), duplicadas.
-- Lista de las primeras ~20 filas con su estado (✓ válida / ⚠ descartada / ✗ duplicada).
-- Toggle "Incluir filas con cantidad o precio en 0" (default OFF).
-- Si hay `sourceListId` seleccionado en la negociación, opcionalmente reemplazar el precio del archivo por el precio de la lista (toggle, default OFF — usar lo que viene en el archivo).
-- Botón **"Importar N items"** que añade las filas válidas al estado `items` del calculator. Los cálculos en vivo (margen, KPIs) se actualizarán automáticamente.
-
-## Cambios técnicos
-
-- **Nuevo archivo** `src/features/negociaciones/ImportItemsDialog.tsx`:
-  - Componente diálogo con tabs (Upload / Paste / Template).
-  - Usa `parseExcel` de `src/lib/excel.ts` con `columnMap = { referencia: ["referencia","ref"], cantidad: ["cantidad","cant","qty"], precio: ["precio unitario","precio_unitario","precio","precio unit"] }`, `requiredKeys: ["referencia","cantidad","precio"]`, `numericKeys: ["cantidad","precio"]`.
-  - Para pegar texto: parser propio que detecta `\t`, `;` o `,`; primera línea = headers; usa la misma normalización.
-  - Para descargar plantilla: usa el módulo `xlsx` (ya cargado dinámicamente en `excel.ts`) → exponer un helper `downloadTemplate()` o hacerlo inline con `XLSX.utils.aoa_to_sheet([["Referencia","cantidad","precio unitario"]])` + `XLSX.writeFile`.
-  - Devuelve un array `{ referencia, cantidad, precio }[]` al componente padre vía callback `onImport`.
-
-- **Edición** `src/features/negociaciones/NegotiationCalculator.tsx`:
-  - Importar el nuevo diálogo.
-  - Añadir botón "Importar items" junto al buscador (línea ~160 área de search).
-  - Handler `handleImport(rows)` que:
-    - Filtra duplicados contra `items` actuales.
-    - Convierte cada fila a `EditorItem` con `uid: makeUid()`, `cantidad: String(qty)`, `precio_unitario: String(price)`, `descuento_pct: "0"`, `source_price_list_id: null` (o el de la lista si el toggle está activo).
-    - Hace `setItems(prev => [...prev, ...nuevos])`.
-    - Toast con resumen: "X items importados, Y duplicados omitidos, Z descartados".
-
-## Resultado para el archivo adjunto
-
-Con `eliminr_2.xlsx` (293 filas):
-- Filas con cantidad=0 o precio=0: ~80 (descartadas por defecto).
-- Filas válidas: ~213 que se importarían directo a la negociación.
-- El usuario puede ajustar descuentos individualmente después en la tabla.
-
-## Notas
-
-- No se toca la base de datos: la importación solo llena el estado del editor; al hacer "Guardar" se persiste como cualquier item creado manualmente.
-- La plantilla y el parser comparten exactamente los mismos headers para garantizar compatibilidad.
+## Detalles técnicos
+- El ajuste se concentrará en `src/features/negociaciones/NegotiationCalculator.tsx`.
+- Voy a tratar el problema como uno de capas y contenedores, no de lógica de negocio.
+- Si hace falta, se normalizarán estos puntos:
+  - `z-0 / z-10 / z-20 / z-50`
+  - `relative / sticky / absolute`
+  - fondos (`bg-card`, `bg-background`, `bg-popover`) para evitar transparencias aparentes
+  - márgenes/padding entre el buscador y la tabla
