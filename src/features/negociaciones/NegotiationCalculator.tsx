@@ -394,6 +394,122 @@ export function NegotiationCalculator({
   const belowMin = totals.belowMin && items.length > 0;
   const okMin = !belowMin && items.length > 0 && totals.ventasNetas > 0;
 
+  const handleExportPdf = () => {
+    if (items.length === 0) return;
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const listName = priceLists.find((p) => p.id === sourceListId)?.name ?? "Sin lista";
+      const today = new Date();
+      const dateStr = today.toLocaleDateString("es-CO");
+
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text(name.trim() || "Negociación", 40, 40);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(110);
+      doc.text(
+        `Lista de precios: ${listName}   ·   Meses de costo: ${
+          costMonths.length ? costMonths.join(", ") : "—"
+        }   ·   Generado: ${dateStr}`,
+        40,
+        58,
+      );
+      doc.setTextColor(0);
+
+      const body = items.map((it) => {
+        const m = metricsByRef.get(it.referencia);
+        const qty = parseNum(it.cantidad) ?? 0;
+        const price = parseNum(it.precio_unitario) ?? 0;
+        const disc = parseNum(it.descuento_pct) ?? 0;
+        return [
+          it.referencia,
+          it.descripcion ?? "",
+          String(qty),
+          formatCurrency(price),
+          `${disc}%`,
+          m?.ctuProm == null ? "—" : formatCurrency(m.ctuProm),
+          m?.margenUnit == null ? "—" : formatCurrency(m.margenUnit),
+          m?.margenPct == null ? "—" : formatPercent(m.margenPct, 1),
+          formatCurrency(m?.subtotal ?? 0),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 80,
+        head: [[
+          "Ref",
+          "Descripción",
+          "Cant.",
+          "PUV",
+          "Desc %",
+          "CTU prom",
+          "Margen U",
+          "Margen %",
+          "Subtotal",
+        ]],
+        body,
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { fontStyle: "bold" },
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+          6: { halign: "right" },
+          7: { halign: "right" },
+          8: { halign: "right", fontStyle: "bold" },
+        },
+        margin: { left: 40, right: 40 },
+      });
+
+      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+      const totalsY = finalY + 20;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Totales", 40, totalsY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const lines = [
+        `Ventas netas: ${formatCurrency(totals.ventasNetas)}`,
+        `Costo total: ${formatCurrency(totals.costoTotal)}`,
+        `Margen bruto $: ${formatCurrency(totals.margenBruto)}`,
+        `Margen bruto %: ${
+          totals.ventasNetas === 0 ? "—" : formatPercent(totals.margenBrutoPct, 1)
+        }   (Meta ${formatPercent(minMarginPct, 0)})`,
+      ];
+      lines.forEach((ln, i) => doc.text(ln, 40, totalsY + 16 + i * 14));
+
+      doc.setFontSize(8);
+      doc.setTextColor(140);
+      doc.text(
+        `Página 1 de ${doc.getNumberOfPages()}`,
+        pageWidth - 40,
+        doc.internal.pageSize.getHeight() - 20,
+        { align: "right" },
+      );
+
+      const slug =
+        (name.trim() || "negociacion")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "") || "negociacion";
+      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
+        today.getDate(),
+      ).padStart(2, "0")}`;
+      doc.save(`negociacion-${slug}-${ymd}.pdf`);
+    } catch (e) {
+      console.error(e);
+      toast.error("No se pudo exportar el PDF");
+    }
+  };
+
   return (
     <section className="space-y-5">
       {/* KPIs en vivo (sticky con espaciado respecto al header) */}
