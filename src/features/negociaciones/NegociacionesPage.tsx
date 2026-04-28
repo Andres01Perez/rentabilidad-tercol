@@ -71,7 +71,7 @@ export function NegociacionesPage() {
         }
       />
 
-      <div className="mt-8">
+      <div className="mt-6">
         {mode.kind === "list" ? (
           <NegotiationsList
             rows={rows}
