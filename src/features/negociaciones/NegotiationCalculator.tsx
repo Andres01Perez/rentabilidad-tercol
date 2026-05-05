@@ -55,7 +55,7 @@ import { chunkedInsert } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 import { useReferenceSearch } from "./useReferenceSearch";
 import { ImportItemsDialog, type ImportedItem } from "./ImportItemsDialog";
-import { NegotiationItemRow } from "./NegotiationItemRow";
+import { NegotiationItemRow as NegotiationItemRowComponent } from "./NegotiationItemRow";
 import {
   NEGOTIATIONS_KEY,
   negotiationItemsKey,
@@ -859,7 +859,7 @@ export function NegotiationCalculator({
               </TableHeader>
               <TableBody>
                 {items.map((it) => (
-                  <NegotiationItemRow
+                  <NegotiationItemRowComponent
                     key={it.uid}
                     item={it}
                     metric={metricsByRef.get(it.referencia)}
