@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type PriceListRow = {
@@ -24,6 +24,7 @@ export const PRICE_LISTS_KEY = ["price-lists"] as const;
 export const priceListsQueryOptions = () =>
   queryOptions({
     queryKey: PRICE_LISTS_KEY,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<PriceListRow[]> => {
       const { data, error } = await supabase
         .from("price_lists")
@@ -51,6 +52,7 @@ export const priceListItemsQueryOptions = (listId: string | null) =>
   queryOptions({
     queryKey: ["price-list-items", listId] as const,
     enabled: !!listId,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<PriceItemRow[]> => {
       if (!listId) return [];
       const { data, error } = await supabase

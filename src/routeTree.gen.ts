@@ -18,7 +18,6 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCostosProductosRouteImport } from './routes/_app/costos-productos'
 import { Route as AppCostosOperacionalesRouteImport } from './routes/_app/costos-operacionales'
 import { Route as AppConfiguracionesRouteImport } from './routes/_app/configuraciones'
-import { Route as AppCalculadoraRouteImport } from './routes/_app/calculadora'
 import { Route as AppAnalisisVentasRouteImport } from './routes/_app/analisis-ventas'
 
 const AppRoute = AppRouteImport.update({
@@ -65,11 +64,6 @@ const AppConfiguracionesRoute = AppConfiguracionesRouteImport.update({
   path: '/configuraciones',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCalculadoraRoute = AppCalculadoraRouteImport.update({
-  id: '/calculadora',
-  path: '/calculadora',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
   id: '/analisis-ventas',
   path: '/analisis-ventas',
@@ -79,7 +73,6 @@ const AppAnalisisVentasRoute = AppAnalisisVentasRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/analisis-ventas': typeof AppAnalisisVentasRoute
-  '/calculadora': typeof AppCalculadoraRoute
   '/configuraciones': typeof AppConfiguracionesRoute
   '/costos-operacionales': typeof AppCostosOperacionalesRoute
   '/costos-productos': typeof AppCostosProductosRoute
@@ -90,7 +83,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/analisis-ventas': typeof AppAnalisisVentasRoute
-  '/calculadora': typeof AppCalculadoraRoute
   '/configuraciones': typeof AppConfiguracionesRoute
   '/costos-operacionales': typeof AppCostosOperacionalesRoute
   '/costos-productos': typeof AppCostosProductosRoute
@@ -104,7 +96,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_app/analisis-ventas': typeof AppAnalisisVentasRoute
-  '/_app/calculadora': typeof AppCalculadoraRoute
   '/_app/configuraciones': typeof AppConfiguracionesRoute
   '/_app/costos-operacionales': typeof AppCostosOperacionalesRoute
   '/_app/costos-productos': typeof AppCostosProductosRoute
@@ -119,7 +110,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/analisis-ventas'
-    | '/calculadora'
     | '/configuraciones'
     | '/costos-operacionales'
     | '/costos-productos'
@@ -130,7 +120,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/analisis-ventas'
-    | '/calculadora'
     | '/configuraciones'
     | '/costos-operacionales'
     | '/costos-productos'
@@ -143,7 +132,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/_app/analisis-ventas'
-    | '/_app/calculadora'
     | '/_app/configuraciones'
     | '/_app/costos-operacionales'
     | '/_app/costos-productos'
@@ -223,13 +211,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConfiguracionesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/calculadora': {
-      id: '/_app/calculadora'
-      path: '/calculadora'
-      fullPath: '/calculadora'
-      preLoaderRoute: typeof AppCalculadoraRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/analisis-ventas': {
       id: '/_app/analisis-ventas'
       path: '/analisis-ventas'
@@ -242,7 +223,6 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAnalisisVentasRoute: typeof AppAnalisisVentasRoute
-  AppCalculadoraRoute: typeof AppCalculadoraRoute
   AppConfiguracionesRoute: typeof AppConfiguracionesRoute
   AppCostosOperacionalesRoute: typeof AppCostosOperacionalesRoute
   AppCostosProductosRoute: typeof AppCostosProductosRoute
@@ -255,7 +235,6 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAnalisisVentasRoute: AppAnalisisVentasRoute,
-  AppCalculadoraRoute: AppCalculadoraRoute,
   AppConfiguracionesRoute: AppConfiguracionesRoute,
   AppCostosOperacionalesRoute: AppCostosOperacionalesRoute,
   AppCostosProductosRoute: AppCostosProductosRoute,

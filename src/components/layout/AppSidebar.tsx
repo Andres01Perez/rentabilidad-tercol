@@ -5,7 +5,6 @@ import {
   Tags,
   Package,
   Building2,
-  Calculator,
   Briefcase,
   TrendingUp,
   History,
@@ -43,8 +42,7 @@ const operacion: NavItem[] = [
 ];
 
 const analisis: NavItem[] = [
-  { title: "Negociaciones", to: "/negociaciones", icon: Briefcase },
-  { title: "Calculadora", to: "/calculadora", icon: Calculator, featured: true },
+  { title: "Negociaciones", to: "/negociaciones", icon: Briefcase, featured: true },
   { title: "Análisis de ventas", to: "/analisis-ventas", icon: TrendingUp },
   { title: "Historial", to: "/historial", icon: History },
 ];

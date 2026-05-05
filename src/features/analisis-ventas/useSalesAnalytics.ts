@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ---------- Tipos públicos (compatibles con la versión anterior) ----------
@@ -172,6 +172,7 @@ const dashboardQueryOptions = (args: UseSalesAnalyticsArgs) => {
       tKey,
       refreshKey,
     ] as const,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<DashboardData> => {
       const { data: json, error } = await supabase.rpc("get_sales_dashboard", {
         p_sales_month: salesMonth,
@@ -305,6 +306,7 @@ export function useSalesDetail(args: UseSalesDetailArgs) {
       refreshKey,
     ] as const,
     enabled,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_sales_detail", {
         p_sales_month: salesMonth,
@@ -418,6 +420,7 @@ export function useSalesByGroup(args: UseSalesByGroupArgs) {
       refreshKey,
     ] as const,
     enabled,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_sales_by_group", {
         p_sales_month: salesMonth,

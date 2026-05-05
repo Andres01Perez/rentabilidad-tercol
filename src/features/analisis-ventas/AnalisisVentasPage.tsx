@@ -30,7 +30,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MonthSelect } from "@/components/period/MonthSelect";
-import { MultiMonthPicker } from "@/features/calculadora/MultiMonthPicker";
+import { MultiMonthPicker } from "@/components/period/MultiMonthPicker";
 import {
   Select,
   SelectContent,
