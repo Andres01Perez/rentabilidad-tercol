@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type CostCenterRow = {
@@ -26,6 +26,7 @@ export const operationalCostsKey = (month: string) =>
 export const costCentersQueryOptions = () =>
   queryOptions({
     queryKey: COST_CENTERS_KEY,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<CostCenterRow[]> => {
       const { data, error } = await supabase
         .from("cost_centers")
@@ -40,6 +41,7 @@ export const costCentersQueryOptions = () =>
 export const operationalCostsQueryOptions = (month: string) =>
   queryOptions({
     queryKey: operationalCostsKey(month),
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<AssignmentRow[]> => {
       const { data, error } = await supabase
         .from("operational_costs")
