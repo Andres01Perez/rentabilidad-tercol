@@ -55,6 +55,7 @@ import { chunkedInsert } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 import { useReferenceSearch } from "./useReferenceSearch";
 import { ImportItemsDialog, type ImportedItem } from "./ImportItemsDialog";
+import { NegotiationItemRow } from "./NegotiationItemRow";
 import {
   NEGOTIATIONS_KEY,
   negotiationItemsKey,
@@ -203,13 +204,16 @@ export function NegotiationCalculator({
     setSearchOpen(false);
   };
 
-  const updateItem = (uid: string, patch: Partial<EditorItem>) => {
-    setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
-  };
+  const updateItem = React.useCallback(
+    (uid: string, patch: Partial<EditorItem>) => {
+      setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
+    },
+    [],
+  );
 
-  const removeItem = (uid: string) => {
+  const removeItem = React.useCallback((uid: string) => {
     setItems((prev) => prev.filter((i) => i.uid !== uid));
-  };
+  }, []);
 
   const handleImport = async (imported: ImportedItem[]) => {
     // Resolve description + suggested price from price list (if any) per reference.
@@ -854,110 +858,17 @@ export function NegotiationCalculator({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((it) => {
-                  const err = validation.errors[it.uid];
-                  const m = metricsByRef.get(it.referencia);
-                  const negM = (m?.margenPct ?? 0) < 0;
-                  const lowM = m?.margenPct != null && m.margenPct < minMarginPct;
-                  return (
-                    <TableRow key={it.uid}>
-                      <TableCell className="text-sm font-bold">{it.referencia}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          value={it.cantidad}
-                          onChange={(e) => updateItem(it.uid, { cantidad: e.target.value })}
-                          className={cn(
-                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
-                            err?.qty && "border-destructive",
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          value={it.precio_unitario}
-                          onChange={(e) =>
-                            updateItem(it.uid, { precio_unitario: e.target.value })
-                          }
-                          className={cn(
-                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
-                            err?.price && "border-destructive",
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          max={100}
-                          value={it.descuento_pct}
-                          onChange={(e) =>
-                            updateItem(it.uid, { descuento_pct: e.target.value })
-                          }
-                          className={cn(
-                            "h-8 w-full min-w-0 px-2 text-right tabular-nums",
-                            err?.disc && "border-destructive",
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                        {m?.ctuProm == null ? (
-                          m?.sinCosto ? (
-                            <span className="text-amber-600">sin costo</span>
-                          ) : m?.costoCero ? (
-                            <span className="text-rose-600">costo 0</span>
-                          ) : (
-                            "—"
-                          )
-                        ) : (
-                          formatCurrency(m.ctuProm)
-                        )}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right text-xs tabular-nums",
-                          negM && "font-semibold text-rose-600",
-                        )}
-                      >
-                        {m?.margenUnit == null ? "—" : formatCurrency(m.margenUnit)}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right text-xs tabular-nums",
-                          negM
-                            ? "font-semibold text-rose-600"
-                            : lowM
-                              ? "text-amber-600"
-                              : m?.margenPct != null
-                                ? "text-emerald-700 dark:text-emerald-400"
-                                : "",
-                        )}
-                      >
-                        {m?.margenPct == null ? "—" : formatPercent(m.margenPct, 1)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-semibold tabular-nums">
-                        {formatCurrency(m?.subtotal ?? 0)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeItem(it.uid)}
-                          title="Quitar"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {items.map((it) => (
+                  <NegotiationItemRow
+                    key={it.uid}
+                    item={it}
+                    metric={metricsByRef.get(it.referencia)}
+                    errors={validation.errors[it.uid]}
+                    minMarginPct={minMarginPct}
+                    onUpdate={updateItem}
+                    onRemove={removeItem}
+                  />
+                ))}
               </TableBody>
             </Table>
           </div>
