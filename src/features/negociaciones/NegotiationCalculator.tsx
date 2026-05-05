@@ -48,8 +48,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { MultiMonthPicker } from "@/features/calculadora/MultiMonthPicker";
-import { useMonthCatalog } from "@/features/calculadora/useCalculadora";
+import { MultiMonthPicker } from "@/components/period/MultiMonthPicker";
+import { useMonthCatalog } from "@/hooks/useMonthCatalog";
 import { formatCurrency, formatPercent, currentMonthDate, previousMonth } from "@/lib/period";
 import { chunkedInsert } from "@/lib/excel";
 import { cn } from "@/lib/utils";
