@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ListasPreciosPage } from "@/features/listas-precios/ListasPreciosPage";
+import { RouteSkeleton } from "@/components/layout/RouteSkeleton";
 
 export const Route = createFileRoute("/_app/listas-precios")({
   head: () => ({
@@ -9,4 +10,7 @@ export const Route = createFileRoute("/_app/listas-precios")({
     ],
   }),
   component: ListasPreciosPage,
+  pendingComponent: RouteSkeleton,
+  pendingMs: 200,
+  pendingMinMs: 300,
 });

@@ -3,6 +3,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { AnalisisVentasPage } from "@/features/analisis-ventas/AnalisisVentasPage";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCw, Home } from "lucide-react";
+import { RouteSkeleton } from "@/components/layout/RouteSkeleton";
 
 export const Route = createFileRoute("/_app/analisis-ventas")({
   head: () => ({
@@ -13,6 +14,9 @@ export const Route = createFileRoute("/_app/analisis-ventas")({
   }),
   component: AnalisisVentasPage,
   errorComponent: AnalisisVentasError,
+  pendingComponent: RouteSkeleton,
+  pendingMs: 200,
+  pendingMinMs: 300,
 });
 
 function AnalisisVentasError({ error, reset }: { error: Error; reset: () => void }) {
